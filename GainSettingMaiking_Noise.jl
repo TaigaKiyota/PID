@@ -1,0 +1,202 @@
+using Random
+using LinearAlgebra
+using Plots
+using LaTeXStrings
+using ControlSystems
+using Zygote
+using JLD2
+using Distributions
+
+include("function_noise.jl")
+include("function_orbit.jl")
+
+rng = MersenneTwister(1)
+
+
+Setting_num = 6
+
+if Setting_num == 1
+    n = 4
+    m = 2
+    p = m
+
+    J = 0.1 * randn(rng, Float64, (n, n))
+    J = (J - J') / 2
+    Randmat = 0.1 * randn(rng, Float64, (n, n))
+    R = Randmat * Randmat'
+    Hamilton = I(n)
+    A = (J - R) * Hamilton
+    B = 0.1 * randn(rng, Float64, (n, m))
+    C = B' * Hamilton
+    y_star = ones(p)
+    W = I(n)
+    V = 0.1 * I(p)
+    h = 0.005
+    Dist_x0 = Uniform(-3, 3)
+elseif Setting_num == 2
+    n = 4
+    m = 2
+    p = m
+
+    J = 0.1 * randn(rng, Float64, (n, n))
+    J = (J - J') / 2
+    Randmat = 0.1 * randn(rng, Float64, (n, n))
+    R = Randmat * Randmat'
+    Hamilton = I(n)
+    A = (J - R) * Hamilton
+    B = 0.1 * randn(rng, Float64, (n, m))
+    C = B' * Hamilton
+    y_star = ones(p)
+    W = 0.00001I(n)
+    V = 0.00001 * I(p)
+    h = 0.005
+    Dist_x0 = Uniform(-3, 3)
+elseif Setting_num == 3
+    n = 40
+    m = 4
+    p = m
+    y_star = 5 * ones(p)
+
+    J = randn(rng, Float64, (n, n))
+    J = (J - J') / 2
+    Randmat = randn(rng, Float64, (n, n))
+    R = Randmat * Randmat'
+    Hamilton = I(n)
+    A = (J - R) * Hamilton
+    B = randn(rng, Float64, (n, m))
+    C = B' * Hamilton
+    W = 0.01 * I(n)
+    V = 0.001 * I(p)
+    h = 0.001
+    Dist_x0 = Uniform(-3, 3)
+elseif Setting_num == 4
+    n = 40
+    m = 4
+    p = m
+    y_star = 5 * ones(p)
+
+    J = 0.1 * randn(rng, Float64, (n, n))
+    J = (J - J') / 2
+    Randmat = 0.1 * randn(rng, Float64, (n, n))
+    R = Randmat * Randmat'
+    Hamilton = I(n)
+    A = (J - R) * Hamilton
+    B = 0.1 * randn(rng, Float64, (n, m))
+    C = B' * Hamilton
+    W = 0.01 * I(n)
+    V = 0.0005 * I(p)
+    h = 0.005
+    Dist_x0 = Uniform(-3, 3)
+elseif Setting_num == 5
+    n = 20
+    m = 4
+    p = m
+    y_star = 5 * ones(p)
+
+    J = 1.0 * randn(rng, Float64, (n, n))
+    J = (J - J') / 2
+    Randmat = 2.0 * randn(rng, Float64, (n, n))
+    R = Randmat * Randmat'
+    Hamilton = 1.0 * I(n)
+    A = (J - R) * Hamilton
+    B = 3 * randn(rng, Float64, (n, m))
+    C = B' * Hamilton
+    W = 0.01 * I(n)
+    V = 0.0005 * I(p)
+    h = 0.005
+    Dist_x0 = Uniform(-3, 3)
+elseif Setting_num == 6
+    n = 30
+    m = 4
+    p = m
+    y_star = 5 * ones(p)
+
+    J = 1.0 * randn(rng, Float64, (n, n))
+    J = (J - J') / 2
+    Randmat = 2.0 * randn(rng, Float64, (n, n))
+    R = Randmat * Randmat'
+    Hamilton = 1.0 * I(n)
+    A = (J - R) * Hamilton
+    B = 3 * randn(rng, Float64, (n, m))
+    C = B' * Hamilton
+    W = 0.01 * I(n)
+    V = 0.0005 * I(p)
+    h = 0.0005
+    Dist_x0 = Uniform(-3, 3)
+end
+
+println("eigen value of A: ", eigvals(A))
+
+equib = inv([A B; C zeros(p, m)]) * [zeros(n); y_star]
+x_star = equib[1:n]
+u_star = equib[(n+1):(n+p)]
+
+F = [A zeros((n, p)); -C zeros((p, p))]
+G = [B; zeros((p, m))]
+H = [C zeros(p, p); zeros(p, n) -I(p)]
+
+# 初期点の分布の計算
+Sigma0 = zeros((n), (n))
+Nsample = 10000
+for i in 1:Nsample
+    global Sigma0
+    x_0 = rand(rng, Dist_x0, n)
+    Sigma0 += (x_0 - x_star) * (x_0 - x_star)'
+end
+Sigma0 = Sigma0 / Nsample
+
+mean_ex0 = zeros(n)
+Nsample = 10000
+for i in 1:Nsample
+    global mean_ex0
+    mean_ex0 += rand(rng, Dist_x0, n) - x_star
+end
+mean_ex0 /= Nsample
+
+V_half = cholesky(V).L
+W_half = cholesky(W).L
+
+
+system = TargetSystem(A,
+    B,
+    C,
+    F,
+    G,
+    H,
+    W,
+    V,
+    W_half,
+    V_half,
+    Dist_x0,
+    h,
+    y_star,
+    x_star,
+    u_star,
+    Sigma0,
+    mean_ex0,
+    n,
+    p,
+    m,
+    rng)
+
+Setting = Dict(
+    "A" => A,
+    "B" => B,
+    "C" => C,
+    "W" => W,
+    "V" => V,
+    "h" => h,
+    "Dist_x0" => Dist_x0,
+    "system" => system
+)
+
+#println("Setting: ", Setting)
+if !isdir("System_setting/Noise_dynamics/Settings/Setting$Setting_num")
+    mkdir("System_setting/Noise_dynamics/Settings/Setting$Setting_num")  # フォルダを作成
+end
+
+@save "System_setting/Noise_dynamics/Settings/Setting$Setting_num/Settings.jld2" Setting
+
+
+
+
