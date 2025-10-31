@@ -13,12 +13,14 @@ using JSON
 using Dates
 
 Setting_num = 6
-simulation_name = "Vanila_parameter2"
+simulation_name = "Vanila_parameter3"
 
 @load "System_setting/Noise_dynamics/Settings/Setting$Setting_num/Settings.jld2" Setting
 
 
 system = Setting["system"]
+
+n_dim = true # システム同定の際に状態空間の次元を情報として与えるか
 
 Trials = 20
 ## 初期点のゲイン
@@ -41,11 +43,11 @@ end
 prob = Problem_param(Q1, Q2, Q_prime, last_value, N_inner_obj)
 
 ## アルゴリズムのパラメータ
-eta = 0.05 # 0.05だといい結果が出そう
+eta = 0.005 # 0.05だといい結果が出そう
 epsilon = 1e-16
 eps_interval = 0.3
 M_interval = 5
-N_sample = 60 # 50
+N_sample = 10 # 50
 N_GD = 100 # 200
 tau = 2000
 r = 0.1
@@ -191,6 +193,11 @@ for trial in 1:Trials
     Us = nothing
     GC.gc()
     # N4sidによるシステム同定
+    #if n_dim
+    #   sys = subspaceid(Data, system.n, verbose=false, zeroD=true)
+    #else
+    #   sys = subspaceid(Data, verbose=false, zeroD=true)
+    #end
     sys = n4sid(Data, system.n, verbose=false, zeroD=true)
     println("System Identification has done")
     Data = nothing
