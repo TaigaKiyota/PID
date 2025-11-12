@@ -5,9 +5,9 @@ mutable struct TargetSystem
     A
     B
     C
-    F
-    G
-    H
+    F #A_hat
+    G #B_hat
+    H #C_hat
     W
     V
     W_half
@@ -39,6 +39,15 @@ function ObjectiveFunction_noise(system, prob, K_P, K_I)
     W_tilde = [system.W+BK_P*system.V*BK_P' BK_P*system.V; system.V*BK_P' system.V]
     X = lyap(F_K, W_tilde)
     return sum(X .* prob.Q_prime) + sum(prob.Q1 .* system.V)
+end
+
+function stability_margin(system, K_P, K_I)
+    F_K = system.F - system.G * [K_P K_I] * system.H
+    eig_closedloop = eigvals(F_K)
+    println("eigenvals of closed loop", eig_closedloop)
+    stab = -maximum(real(eig_closedloop))
+    println("stability margin: ", stab)
+    return stab
 end
 
 # 真の勾配
@@ -319,7 +328,7 @@ function grad_obj_est_Base(K_P, K_I, system, N_sample, reset, tau, r, D_base, h_
     grad_P = zeros(system.p)
     grad_I = zeros(system.p)
 
-    Shere_samples = randn(system.rng, Float64, (N_sample, 2 * system.p)) # 球面上のノイズ作成のためのガウシアンノイズ
+    Sphere_samples = randn(system.rng, Float64, (N_sample, 2 * system.p)) # 球面上のノイズ作成のためのガウシアンノイズ
 
     #D_base = 2 * (system.n + system.p - 1) + 20
     #h_samp = 2 * system.h
@@ -329,9 +338,9 @@ function grad_obj_est_Base(K_P, K_I, system, N_sample, reset, tau, r, D_base, h_
     base_vecP = Baseline_vecP_1traj1obj(system, prob, K_P, K_I, reset, h_samp, D_base, N_base)
 
     @simd for i in 1:N_sample
-        #zp = Shere_samples[i, :]
+        #zp = Sphere_samples[i, :]
 
-        zp = Shere_samples[i, :]
+        zp = Sphere_samples[i, :]
         zp = zp / norm(zp)
         zp = zp * sqrt(2 * system.p)
         U_P = zp[1:system.p]
@@ -364,9 +373,9 @@ function grad_obj_est_WithoutBase(K_P, K_I, system, N_sample, reset, tau, r)
     grad_P = zeros(system.p)
     grad_I = zeros(system.p)
 
-    Shere_samples = randn(system.rng, Float64, (N_sample, 2 * system.p))
+    Sphere_samples = randn(system.rng, Float64, (N_sample, 2 * system.p))
     for i in 1:N_sample
-        zp = Shere_samples[i, :]
+        zp = Sphere_samples[i, :]
         zp = zp / norm(zp)
         zp = zp * sqrt(2 * system.p)
         U_P = zp[1:system.p]
@@ -375,17 +384,17 @@ function grad_obj_est_WithoutBase(K_P, K_I, system, N_sample, reset, tau, r)
         #ある初期点からの摂動を入れたゲインでの目的関数の計算，
         cost = 0
         if prob.last_value == false
-            for j in 1:prob.N_inner_obj
+            for j in 1:Opt.N_inner_obj
                 x_0 = rand(system.rng, system.Dist_x0, system.n)
                 cost += obj_trunc(system, prob, K_P + r * diagm(U_P), K_I + r * diagm(U_I), x_0, reset, tau)
             end
         else
-            for j in 1:prob.N_inner_obj
+            for j in 1:Opt.N_inner_obj
                 x_0 = rand(system.rng, system.Dist_x0, system.n)
                 cost += obj_lastvalue(system, prob, K_P + r * diagm(U_P), K_I + r * diagm(U_I), x_0, reset, tau)
             end
         end
-        cost /= prob.N_inner_obj
+        cost /= Opt.N_inner_obj
 
         grad_P += cost .* U_P
         grad_I += cost .* U_I
@@ -399,22 +408,22 @@ function grad_obj_est_WithoutBase(K_P, K_I, system, N_sample, reset, tau, r)
     return grad_P, grad_I, grad_Ps, grad_Is
 end
 
-function grad_est_TwoPoint(K_P, K_I, system, N_sample, reset, tau, r)
+function grad_est_TwoPoint(K_P, K_I, system, prob, Opt, reset)
     """
     モデルフリーな勾配の推定ほう
     ベクトル形式の勾配を返す．
     """
 
-    grad_Ps = zeros(system.p, N_sample)
-    grad_Is = zeros(system.p, N_sample)
+    grad_Ps = zeros(system.p, Opt.N_sample)
+    grad_Is = zeros(system.p, Opt.N_sample)
 
     grad_P = zeros(system.p)
     grad_I = zeros(system.p)
 
-    Shere_samples = randn(system.rng, Float64, (N_sample, 2 * system.p))
-    Shere_samples = randn(system.rng, Float64, (N_sample, 2 * system.p))
-    for i in 1:N_sample
-        zp = Shere_samples[i, :]
+    Sphere_samples = randn(system.rng, Float64, (Opt.N_sample, 2 * system.p))
+    Sphere_samples = randn(system.rng, Float64, (Opt.N_sample, 2 * system.p))
+    for i in 1:Opt.N_sample
+        zp = Sphere_samples[i, :]
 
         zp = zp / norm(zp)
         zp = zp * sqrt(2 * system.p)
@@ -425,39 +434,39 @@ function grad_est_TwoPoint(K_P, K_I, system, N_sample, reset, tau, r)
         cost1 = 0
         cost2 = 0
         if prob.last_value == false
-            for i in 1:prob.N_inner_obj
+            for i in 1:Opt.N_inner_obj
                 x_0 = rand(system.rng, system.Dist_x0, system.n)
-                cost1 += obj_trunc(system, prob, K_P + r * diagm(U_P), K_I + r * diagm(U_I), x_0, reset, tau)
+                cost1 += obj_trunc(system, prob, K_P + Opt.r * diagm(U_P), K_I + Opt.r * diagm(U_I), x_0, reset, Opt.tau)
             end
-            cost1 /= prob.N_inner_obj
+            cost1 /= Opt.N_inner_obj
 
-            for i in 1:prob.N_inner_obj
+            for i in 1:Opt.N_inner_obj
                 x_0 = rand(system.rng, system.Dist_x0, system.n)
-                cost2 += obj_trunc(system, prob, K_P + r * diagm(U_P), K_I + r * diagm(U_I), x_0, reset, tau)
+                cost2 += obj_trunc(system, prob, K_P + Opt.r * diagm(U_P), K_I + Opt.r * diagm(U_I), x_0, reset, Opt.tau)
             end
-            cost2 /= prob.N_inner_obj
+            cost2 /= Opt.N_inner_obj
         else
-            for i in 1:prob.N_inner_obj
+            for i in 1:Opt.N_inner_obj
                 x_0 = rand(system.rng, system.Dist_x0, system.n)
-                cost1 += obj_lastvalue(system, prob, K_P + r * diagm(U_P), K_I + r * diagm(U_I), x_0, reset, tau)
+                cost1 += obj_lastvalue(system, prob, K_P + Opt.r * diagm(U_P), K_I + Opt.r * diagm(U_I), x_0, reset, Opt.tau)
             end
-            cost1 /= prob.N_inner_obj
+            cost1 /= Opt.N_inner_obj
 
-            for i in 1:prob.N_inner_obj
+            for i in 1:Opt.N_inner_obj
                 x_0 = rand(system.rng, system.Dist_x0, system.n)
-                cost2 += obj_lastvalue(system, prob, K_P - r * diagm(U_P), K_I - r * diagm(U_I), x_0, reset, tau)
+                cost2 += obj_lastvalue(system, prob, K_P - Opt.r * diagm(U_P), K_I - Opt.r * diagm(U_I), x_0, reset, Opt.tau)
             end
-            cost2 /= prob.N_inner_obj
+            cost2 /= Opt.N_inner_obj
         end
 
         grad_P += (cost1 - cost2) .* U_P
         grad_I += (cost1 - cost2) .* U_I
 
-        grad_Ps[:, i] = grad_P ./ (2.0 * r * i)
-        grad_Is[:, i] = grad_I ./ (2.0 * r * i)
+        grad_Ps[:, i] = grad_P ./ (2.0 * Opt.r * i)
+        grad_Is[:, i] = grad_I ./ (2.0 * Opt.r * i)
     end
-    grad_P = grad_P ./ (r * N_sample)
-    grad_I = grad_I ./ (r * N_sample)
+    grad_P = grad_P ./ (Opt.r * Opt.N_sample)
+    grad_I = grad_I ./ (Opt.r * Opt.N_sample)
 
     return grad_P, grad_I, grad_Ps, grad_Is
 end
@@ -474,18 +483,18 @@ function grad_est_SimpleBaseline(K_P, K_I, system, N_sample, reset, tau, r)
     grad_P = zeros(system.p)
     grad_I = zeros(system.p)
 
-    Shere_samples = randn(system.rng, Float64, (N_sample, 2 * system.p))
-    Shere_samples = randn(system.rng, Float64, (N_sample, 2 * system.p))
+    Sphere_samples = randn(system.rng, Float64, (N_sample, 2 * system.p))
+    Sphere_samples = randn(system.rng, Float64, (N_sample, 2 * system.p))
 
     base = 0
-    for i in prob.N_inner_obj
+    for i in Opt.N_inner_obj
         x_0 = rand(system.rng, system.Dist_x0, system.n)
         base += obj_lastvalue(system, prob, K_P, K_I, x_0, reset, tau)
     end
-    base /= prob.N_inner_obj
+    base /= Opt.N_inner_obj
 
     for i in 1:N_sample
-        zp = Shere_samples[i, :]
+        zp = Sphere_samples[i, :]
 
         zp = zp / norm(zp)
         zp = zp * sqrt(2 * system.p)
@@ -496,17 +505,17 @@ function grad_est_SimpleBaseline(K_P, K_I, system, N_sample, reset, tau, r)
         cost = 0.0
 
         if prob.last_value == false
-            for i in 1:prob.N_inner_obj
+            for i in 1:Opt.N_inner_obj
                 x_0 = rand(system.rng, system.Dist_x0, system.n)
                 cost += obj_trunc(system, prob, K_P + r * diagm(U_P), K_I + r * diagm(U_I), x_0, reset, tau)
             end
         else
-            for i in 1:prob.N_inner_obj
+            for i in 1:Opt.N_inner_obj
                 x_0 = rand(system.rng, system.Dist_x0, system.n)
                 cost += obj_lastvalue(system, prob, K_P + r * diagm(U_P), K_I + r * diagm(U_I), x_0, reset, tau)
             end
         end
-        cost /= float(prob.N_inner_obj)
+        cost /= float(Opt.N_inner_obj)
 
         grad_P += (cost - base) .* U_P
         grad_I += (cost - base) .* U_I
@@ -553,7 +562,7 @@ function ProjectGradient_Gain_Conststep_Noise(K_P, K_I, reset, system, prob, Opt
         if Opt.method_name == "One_point_WithoutBase"
             grad_P, grad_I, _, _ = grad_obj_est_WithoutBase(K_P, K_I, system, Opt.N_sample, reset, Opt.tau, Opt.r)
         elseif Opt.method_name == "TwoPoint"
-            grad_P, grad_I, _, _ = grad_est_TwoPoint(K_P, K_I, system, Opt.N_sample, reset, Opt.tau, Opt.r)
+            grad_P, grad_I, _, _ = grad_est_TwoPoint(K_P, K_I, system, prob, Opt, reset)
         elseif Opt.method_name == "Onepoint_SimpleBaseline"
             grad_P, grad_I, _, _ = grad_est_SimpleBaseline(K_P, K_I, system, Opt.N_sample, reset, Opt.tau, Opt.r)
         end
@@ -569,7 +578,7 @@ function ProjectGradient_Gain_Conststep_Noise(K_P, K_I, reset, system, prob, Opt
         #射影する
         #println(f_val)
         difference = sqrt(sum((K_P_next - K_P) .^ 2) + sum((K_I_next - K_I) .^ 2))
-        if (difference < epsilon * eta)
+        if (difference < Opt.epsilon_GD * eta)
             push!(Kp_list, K_P)
             push!(Ki_list, K_I)
             push!(f_list, val)
@@ -627,7 +636,7 @@ function ProjGrad_Gain_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Opt)
         #射影する
         #println(f_val)
         difference = sqrt(sum((K_P_next - K_P) .^ 2) + sum((K_I_next - K_I) .^ 2))
-        if (difference < epsilon * eta)
+        if (difference < Opt.epsilon_GD * eta)
             push!(Kp_list, K_P)
             push!(Ki_list, K_I)
             push!(f_list, val)

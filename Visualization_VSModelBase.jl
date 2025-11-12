@@ -14,7 +14,7 @@ using JSON
 using Dates
 
 Setting_num = 6
-simulation_name = "Vanila_parameter2"
+simulation_name = "Vanila_parameter3"
 
 @load "System_setting/Noise_dynamics/Settings/Setting$Setting_num/Settings.jld2" Setting
 
@@ -64,13 +64,13 @@ println("SysId FF error", list_error_u_Sysid)
 println("Mean SysId: ", mean(list_error_u_Sysid))
 println("standard error  SysId: ", std(list_error_u_Sysid))
 
-
+# 箱ひげ図のプロット
 boxplot(list_error_u_MFree,
-    tickfontsize=18, yscale=:log10, yguidefont=font(20), fillcolor=:red, legend=false)
-boxplot!(list_error_u_Sysid, fillcolor=:blue,)
+    tickfontsize=18, yguidefont=font(20), fillcolor=:red, legend=false, outliercolor=:red, markercolor=:red)
+boxplot!(list_error_u_Sysid, fillcolor=:blue, outliercolor=:blue, markercolor=:blue)
 xticks!((1:2, ["Proposed method", "Indirect approach"]))
-yticks!([1e-2, 1e-1, 1, 10, 20], ["0.01", "0.1", "1", "10", "20"]),
-ylims!(1e-2, 20)
+#yticks!([1e-2, 1e-1, 1, 10, 20], ["0.01", "0.1", "1", "10", "20"]),
+#ylims!(1e-2, 20)
 ylabel!(L"\|\| u_0 - u^{\star} \|\|")
 savefig(dir * "/FF_error_boxplot.png")
 
@@ -90,7 +90,7 @@ if !isdir(dir_path)
 end
 
 ## シミュレーションによる軌道の確認
-trial = 5
+trial = 20
 x_0 = zeros(system.n)
 z_0 = zeros(system.p)
 T = 5
@@ -163,7 +163,7 @@ std_MBase_Sysid = std(Concat_MBase_Sysid; dims=2)[:]
 
 plotting = plot(legendfontsize=18, tickfontsize=15, guidefont=18, legend=:right)
 # プロット（平均 ± 1σのリボン）
-plot!(plotting, 1:N_GD, Mean_Mfree_hat, ribbon=std_Mfree_hat, label="Model Free", lw=3, lc=:red, fillcolor=:red)
+plot!(plotting, 1:N_GD, Mean_Mfree_hat, ribbon=std_Mfree_hat, label="Proposed Method", lw=3, lc=:red, fillcolor=:red)
 plot!(plotting, 1:N_GD, Mean_MBase_Sysid, ribbon=std_MBase_Sysid, label="Indirect Approach", lw=3, lc=:blue, fillcolor=:blue)
 xlabel!("Iteration")
 ylabel!(L"f(K;u^{\star})")
@@ -175,7 +175,7 @@ if !isdir(dir_path)
     mkdir(dir_path)  # フォルダを作成
 end
 ## シミュレーションによる軌道の確認
-trial = 5
+trial = 20
 x_0 = zeros(system.n)
 z_0 = zeros(system.p)
 T = 5

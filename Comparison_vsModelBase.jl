@@ -8,12 +8,13 @@ using StatsPlots
 
 include("function_noise.jl")
 include("function_orbit.jl")
+include("function_AlgoParam.jl")
 using JLD2
 using JSON
 using Dates
 
 Setting_num = 6
-simulation_name = "Vanila_parameter3"
+simulation_name = "Estimated_parameter"
 
 @load "System_setting/Noise_dynamics/Settings/Setting$Setting_num/Settings.jld2" Setting
 
@@ -31,6 +32,7 @@ K_I = 1.0I(system.p)
 Q1 = 200.0I(system.p)
 Q2 = 20.0I(system.p)
 Q_prime = [system.C'*Q1*system.C zeros(system.n, system.p); zeros(system.p, system.n) Q2]
+Q_prime = Symmetric((Q_prime + Q_prime') / 2)
 last_value = true
 N_inner_obj = 20 #20
 struct Problem_param
@@ -38,47 +40,22 @@ struct Problem_param
     Q2
     Q_prime
     last_value
-    N_inner_obj
 end
-prob = Problem_param(Q1, Q2, Q_prime, last_value, N_inner_obj)
+prob = Problem_param(Q1, Q2, Q_prime, last_value)
 
 ## アルゴリズムのパラメータ
 eta = 0.005 # 0.05だといい結果が出そう
-epsilon = 1e-16
+epsilon_GD = 1e-16
+delta = 0.05 # 確率のパラメータ
 eps_interval = 0.3
 M_interval = 5
-N_sample = 10 # 50
+
+norm_omega = sqrt(2 * system.p) * M_interval
+
+N_sample = 5 # 50
 N_GD = 100 # 200
 tau = 2000
 r = 0.1
-
-method_num = 3
-method_names_list = ["Onepoint_SimpleBaseline", "One_point_WithoutBase", "TwoPoint"]
-method_name = method_names_list[method_num]
-## 最適化のパラメータ設定
-mutable struct Optimization_param
-    eta
-    epsilon
-    eps_interval
-    M_interval
-    N_sample
-    N_GD
-    tau
-    r
-    method_name
-end
-
-Opt = Optimization_param(
-    eta,
-    epsilon,
-    eps_interval,
-    M_interval,
-    N_sample,
-    N_GD,
-    tau,
-    r,
-    method_name
-)
 
 # FF推定のためのパラメータ
 K_P_uhat = 0.3 * I(system.p)
@@ -93,9 +70,63 @@ eig_min_Z = minimum(eigvals_Z)
 tau_u = 2 * eig_max_Z * log(sqrt(system.m * system.p) * norm(system.C, 2) * norm(inv(A_K_uhat'), 2) * norm(system.B, 2) * eig_max_Z / (eig_min_Z * epsilon_u))
 println("Estimated tau_u: ", tau_u)
 
+# 理論保証によって導かれたアルゴリズムのパラメータ
+obj_init = ObjectiveFunction_noise(system, prob, K_P, K_I)
+stab = stability_margin(system, K_P, K_I) #初期点の安定余裕できんじ
+epsilon_EstGrad = 1e-1
+r, tau, tau_u, N_sample, N_inner_obj = Algo_params(system,
+    prob,
+    epsilon_EstGrad,
+    obj_init,
+    delta,
+    norm_omega,
+    K_P_uhat,
+    stab)
+println("理論保証から導かれたパラメータ")
+println("r: ", r)
+println("tau: ", tau)
+println("tau_u: ", tau_u)
+println("N_sample: ", N_sample)
+println("N_inner_obj: ", N_inner_obj)
+
+method_num = 3
+method_names_list = ["Onepoint_SimpleBaseline", "One_point_WithoutBase", "TwoPoint"]
+method_name = method_names_list[method_num]
+## 最適化のパラメータ設定
+mutable struct Optimization_param
+    eta
+    epsilon_GD
+    epsilon_EstGrad
+    delta
+    eps_interval
+    M_interval
+    N_sample
+    N_inner_obj
+    N_GD
+    tau
+    r
+    method_name
+end
+
+Opt = Optimization_param(
+    eta,
+    epsilon_GD,
+    epsilon_EstGrad,
+    delta, #理論保証から導かれたパラメータを使用する時に使う
+    eps_interval,
+    M_interval,
+    N_sample,
+    N_inner_obj,
+    N_GD,
+    tau,
+    r,
+    method_name
+)
+
+
 
 ## システム同定パラメータ
-Ts = 0.005 #サンプル間隔
+Ts = system.h #サンプル間隔
 Num_trajectory = 1 #サンプル数軌道の数
 Num_Samples_per_traj = Num_Samples_per_traj = 2 * N_inner_obj * N_sample * N_GD #200000 #1つの軌道につきサンプル数個数
 println("Num_Samples_per_traj: ", Num_Samples_per_traj)
@@ -124,7 +155,9 @@ params = Dict(
     "Q2" => Q2,
     "N_inner_obj" => N_inner_obj,
     "eta" => eta,
-    "epsilon" => epsilon,
+    "epsilon_GD" => epsilon_GD,
+    "epsilon_EstGrad" => epsilon_EstGrad,
+    "delta" => delta,
     "eps_interval" => eps_interval,
     "M_interval" => M_interval,
     "N_sample" => N_sample,
@@ -199,6 +232,7 @@ for trial in 1:Trials
     #   sys = subspaceid(Data, verbose=false, zeroD=true)
     #end
     sys = n4sid(Data, system.n, verbose=false, zeroD=true)
+    #sys = subspaceid(Data, system.n, verbose=false, zeroD=true)
     println("System Identification has done")
     Data = nothing
     GC.gc()
@@ -258,7 +292,7 @@ for trial in 1:Trials
     push!(list_ustar_Sysid, u_star_est)
     # システム同定によるゲイン最適化
     Q_prime_sysid = [est_system.C'*Q1*est_system.C zeros(est_system.n, est_system.p); zeros(est_system.p, est_system.n) Q2]
-    prob_sysid = Problem_param(Q1, Q2, Q_prime_sysid, last_value, N_inner_obj)
+    prob_sysid = Problem_param(Q1, Q2, Q_prime_sysid, last_value)
     Kp_seq_SysId, Ki_seq_SysId, _ = ProjGrad_Gain_Conststep_ModelBased_Noise(K_P, K_I, est_system, prob_sysid, Opt)
     push!(list_Kp_seq_Sysid, Kp_seq_SysId)
     push!(list_Ki_seq_Sysid, Ki_seq_SysId)

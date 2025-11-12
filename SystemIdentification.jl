@@ -8,10 +8,6 @@ include("function_orbit.jl")
 #rng = MersenneTwister(1)
 Setting_num = 6
 
-Ts = 0.001 #サンプル間隔
-Num_trajectory = 1 #サンプル数軌道の数
-Num_Samples_per_traj = 200000 #1つの軌道につきサンプル数個数
-PE_power = 0.1 #Setting1~4までは20でやっていた．5は1
 
 n_dim = true
 noise_free = false
@@ -21,6 +17,11 @@ noise_free = false
 for (key, value) in Setting
     @eval $(Symbol(key)) = $value
 end
+
+Ts = system.h#サンプル間隔
+Num_trajectory = 1 #サンプル数軌道の数
+Num_Samples_per_traj = 40000 #1つの軌道につきサンプル数個数
+PE_power = 0.1 #Setting1~4までは20でやっていた．5は1
 
 
 Steps_per_sample = Ts / system.h
@@ -116,13 +117,15 @@ if n_dim
 else
     sys = n4sid(Data, verbose=false, zeroD=true)
 end
+sys = n4sid(Data, system.n, verbose=true, zeroD=true)
+
 method_name = "N4SID"
 println("System Identification has done")
 cont_sys = d2c(sys)
-println("estimated model \n", cont_sys)
-println("sys.sys: ", cont_sys.sys)
-println("sys.Q: ", cont_sys.Q)
-println("sys.R: ", cont_sys.R)
+#println("estimated model \n", cont_sys)
+#println("sys.sys: ", cont_sys.sys)
+#println("sys.Q: ", cont_sys.Q)
+#println("sys.R: ", cont_sys.R)
 
 A_est, B_est, C_est, D_est = cont_sys.A, cont_sys.B, cont_sys.C, cont_sys.D
 W_est, V_est = cont_sys.Q, cont_sys.R
@@ -193,6 +196,31 @@ est_system = TargetSystem(
 
 @save "System_setting/Noise_dynamics/Settings/Setting$Setting_num/N4sid_ndim=$(n_dim)_Ts=$(Ts)_NumSample=$(Num_Samples_per_traj)/Est_matrices.jld2" est_system
 
+sys = newpem(Data, system.n, zeroD=true)
+
+method_name = "pem"
+println("System Identification has done")
+cont_sys = d2c(sys)
+#println("estimated model \n", cont_sys)
+#println("sys.sys: ", cont_sys.sys)
+#println("sys.Q: ", cont_sys.Q)
+#println("sys.R: ", cont_sys.R)
+
+A_est, B_est, C_est, D_est = cont_sys.A, cont_sys.B, cont_sys.C, cont_sys.D
+W_est, V_est = cont_sys.Q, cont_sys.R
+
+if !isdir("test_file/Gain_result_noise/Settings/Setting$Setting_num")
+    mkdir("test_file/Gain_result_noise/Settings/Setting$Setting_num")  # フォルダを作成
+end
+p = bodeplot([sysc_true[1, 1], cont_sys.sys[1, 1]], label=["True" "n4sid"], layout=(2, 1))
+savefig(p, dir * "/Bode_pem_11.png")
+p = bodeplot([sysc_true[1, 2], cont_sys.sys[1, 2]], label=["True" "n4sid"], layout=(2, 1))
+savefig(p, dir * "/Bode_pem_12.png")
+p = bodeplot([sysc_true[2, 1], cont_sys.sys[2, 1]], label=["True" "n4sid"], layout=(2, 1))
+savefig(p, dir * "Bode_pem_21.png")
+p = bodeplot([sysc_true[2, 2], cont_sys.sys[2, 2]], label=["True" "n4sid"], layout=(2, 1))
+savefig(p, dir * "/Bode_pem_22.png")
+
 # 部分空間同定法
 println("部分空間同定法")
 if n_dim
@@ -200,12 +228,13 @@ if n_dim
 else
     sys = subspaceid(Data, verbose=false, zeroD=true)
 end
+ys = subspaceid(Data, system.n, verbose=false, zeroD=true)
 println("System Identification has done")
 cont_sys = d2c(sys)
-println("estimated model \n", cont_sys)
-println("sys.sys: ", cont_sys.sys)
-println("sys.Q: ", cont_sys.Q)
-println("sys.R: ", cont_sys.R)
+#println("estimated model \n", cont_sys)
+#println("sys.sys: ", cont_sys.sys)
+#println("sys.Q: ", cont_sys.Q)
+#println("sys.R: ", cont_sys.R)
 
 A_est, B_est, C_est, D_est = cont_sys.A, cont_sys.B, cont_sys.C, cont_sys.D
 W_est, V_est = cont_sys.Q, cont_sys.R
