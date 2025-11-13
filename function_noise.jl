@@ -584,7 +584,7 @@ function ProjectGradient_Gain_Conststep_Noise(K_P, K_I, reset, system, prob, Opt
             push!(f_list, val)
             return Kp_list, Ki_list, f_list
         end
-        if (cnt % 10 == 0)
+        if (cnt % 50 == 0)
             println(cnt)
             println(val)
             #println("勾配の推定", est_grad)
@@ -642,7 +642,7 @@ function ProjGrad_Gain_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Opt)
             push!(f_list, val)
             return Kp_list, Ki_list, f_list
         end
-        if (cnt % 10 == 0)
+        if (cnt % 50 == 0)
             println(cnt)
             println(val)
             #println("勾配の推定", est_grad)

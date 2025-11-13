@@ -13,8 +13,9 @@ using JLD2
 using JSON
 using Dates
 
-Setting_num = 6
-simulation_name = "Estimated_parameter"
+Setting_num = 7
+simulation_name = "Vanila_parameter"
+estimated_param = false
 
 @load "System_setting/Noise_dynamics/Settings/Setting$Setting_num/Settings.jld2" Setting
 
@@ -74,15 +75,19 @@ println("Estimated tau_u: ", tau_u)
 obj_init = ObjectiveFunction_noise(system, prob, K_P, K_I)
 stab = stability_margin(system, K_P, K_I) #初期点の安定余裕できんじ
 epsilon_EstGrad = 1e-1
-r, tau, tau_u, N_sample, N_inner_obj = Algo_params(system,
-    prob,
-    epsilon_EstGrad,
-    obj_init,
-    delta,
-    norm_omega,
-    K_P_uhat,
-    stab)
-println("理論保証から導かれたパラメータ")
+if estimated_param
+    r, tau, tau_u, N_sample, N_inner_obj = Algo_params(system,
+        prob,
+        epsilon_EstGrad,
+        obj_init,
+        delta,
+        norm_omega,
+        K_P_uhat,
+        stab)
+    println("理論保証から導かれたパラメータ")
+else
+    println("手動で決定したパラメータ")
+end
 println("r: ", r)
 println("tau: ", tau)
 println("tau_u: ", tau_u)

@@ -20,6 +20,29 @@ function Generate_system(seed_gen_system, seed_attr_system, Setting_num)
         V = 0.0005 * I(p)
         h = 0.0005
         Dist_x0 = Uniform(-3, 3)
+    elseif Setting_num == 7
+        # Setting_num 6から共分散行列をランダムに
+        n = 30
+        m = 4
+        p = m
+        y_star = 5 * ones(p)
+
+        J = 1.0 * randn(rng, Float64, (n, n))
+        J = (J - J') / 2
+        Randmat = 2.0 * randn(rng, Float64, (n, n))
+        R = Randmat * Randmat'
+        Hamilton = 1.0 * I(n)
+        A = (J - R) * Hamilton
+        B = 3 * randn(rng, Float64, (n, m))
+        C = B' * Hamilton
+        Randmat_w = randn(rng, Float64, (n, n))
+        Rand_w = Randmat_w * Randmat_w'
+        W = 0.001 * Rand_w
+        Randmat_p = randn(rng, Float64, (p, p))
+        Rand_p = Randmat_p * Randmat_p'
+        V = 0.0001 * Rand_p
+        h = 0.0005
+        Dist_x0 = Uniform(-3, 3)
     end
 
     equib = inv([A B; C zeros(p, m)]) * [zeros(n); y_star]
