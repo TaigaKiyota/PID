@@ -16,7 +16,7 @@ using Dates
 
 ErrorNorm(A, Aans, A0) = sqrt(sum((A - Aans) .^ 2) / sum((Aans - A0) .^ 2))
 
-Setting_num = 6
+Setting_num = 7
 simulation_name = "Vanila_parameter"
 
 dir = "Comparison_SomeSetting/Noise_dynamics/Setting$Setting_num"
