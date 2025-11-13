@@ -145,8 +145,8 @@ rng_parent = MersenneTwister(1)
 for iter_system in 1:Num_systems
     println("iter_system: ", iter_system)
     #ランダムにシステムを生成
-    seed_gen_system = rand(rng_parent, Int64)
-    seed_attr_system = rand(rng_parent, Int64)
+    seed_gen_system = rand(rng_parent, UInt64)
+    seed_attr_system = rand(rng_parent, UInt64)
     system = Generate_system(seed_gen_system, seed_attr_system, Setting_num)
 
     #最適化問題のパラメータ
