@@ -1,4 +1,4 @@
-using LinearAlgebra, Logging
+using LinearAlgebra, Logging, MatrixEquations
 include("function_orbit.jl")
 
 mutable struct TargetSystem
@@ -41,6 +41,14 @@ function ObjectiveFunction_noise(system, prob, K_P, K_I)
     return sum(X .* prob.Q_prime) + sum(prob.Q1 .* system.V)
 end
 
+function ObjectiveFunction_discrete_noise(system, prob, K_P, K_I)
+    F_K = system.F - system.G * [K_P K_I] * system.H
+    BK_P = system.B * K_P
+    W_tilde = [system.W+BK_P*system.V*BK_P' BK_P*system.V; system.V*BK_P' system.V]
+    X = lyapd(F_K, W_tilde)
+    return sum(X .* prob.Q_prime) + sum(prob.Q1 .* system.V)
+end
+
 function stability_margin(system, K_P, K_I)
     F_K = system.F - system.G * [K_P K_I] * system.H
     eig_closedloop = eigvals(F_K)
@@ -58,6 +66,20 @@ function grad_noise(system, prob, K_P, K_I)
     X = lyap(F_K, W_tilde)
     Y = lyap(F_K', prob.Q_prime)
     Z = -2 * system.G' * Y * X * system.H'
+    grad_P = Z[:, 1:system.p] + 2 * system.G' * Y * [BK_P; 1I(system.p)] * system.V
+    grad_I = Z[:, system.p+1:2*system.p]
+    return grad_P, grad_I
+end
+
+# 真の勾配 discrete
+function grad_discrete_noise(system, prob, K_P, K_I)
+    # gradient for discrete system
+    F_K = system.F - system.G * [K_P K_I] * system.H
+    BK_P = system.B * K_P
+    W_tilde = [system.W+BK_P*system.V*BK_P' BK_P*system.V; system.V*BK_P' system.V]
+    X = lyapd(F_K, W_tilde)
+    Y = lyapd(F_K', prob.Q_prime)
+    Z = -2 * system.G' * Y * F_K * X * system.H'
     grad_P = Z[:, 1:system.p] + 2 * system.G' * Y * [BK_P; 1I(system.p)] * system.V
     grad_I = Z[:, system.p+1:2*system.p]
     return grad_P, grad_I
@@ -584,7 +606,7 @@ function ProjectGradient_Gain_Conststep_Noise(K_P, K_I, reset, system, prob, Opt
             push!(f_list, val)
             return Kp_list, Ki_list, f_list
         end
-        if (cnt % 50 == 0)
+        if (cnt % 10 == 0)
             println(cnt)
             println(val)
             #println("勾配の推定", est_grad)
@@ -658,4 +680,60 @@ function ProjGrad_Gain_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Opt)
     end
     return Kp_list, Ki_list, f_list
 end
+
+function ProjGrad_Discrete_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Opt)
+    #P制御の無限次元経過後の誤差を最小化する
+    f_list = []
+    Kp_list = []
+    Ki_list = []
+
+    push!(Kp_list, K_P)
+    push!(Ki_list, K_I)
+
+    cnt = 0
+    # 初期点での目的関数値
+
+    val = ObjectiveFunction_discrete_noise(system, prob, K_P, K_I)
+    println("目的関数: ", val)
+    push!(f_list, val)
+
+    while cnt < Opt.N_GD
+
+        grad_P, grad_I = grad_discrete_noise(system, prob, K_P, K_I)
+        grad_P = diag(grad_P)
+        grad_I = diag(grad_I)
+        K_P_next = K_P - Opt.eta * diagm(grad_P)
+        K_I_next = K_I - Opt.eta * diagm(grad_I)
+
+        K_P_next = Projection_diagnal_interval(K_P_next, Opt, system)
+        K_I_next = Projection_diagnal_interval(K_I_next, Opt, system)
+
+        cnt += 1
+        val = ObjectiveFunction_discrete_noise(system, prob, K_P, K_I)
+        #射影する
+        #println(f_val)
+        difference = sqrt(sum((K_P_next - K_P) .^ 2) + sum((K_I_next - K_I) .^ 2))
+        if (difference < Opt.epsilon_GD * Opt.eta)
+            push!(Kp_list, K_P)
+            push!(Ki_list, K_I)
+            push!(f_list, val)
+            return Kp_list, Ki_list, f_list
+        end
+        if (cnt % 50 == 0)
+            println(cnt)
+            println(val)
+            #println("勾配の推定", est_grad)
+            #println("勾配", 2 * ((C * inv(A_K) * B * K_M)' * (C * inv(A_K) * B * K_M)) * (reset - u_equib))
+        end
+        K_P = K_P_next
+        K_I = K_I_next
+
+        push!(Kp_list, K_P)
+        push!(Ki_list, K_I)
+        push!(f_list, val)
+
+    end
+    return Kp_list, Ki_list, f_list
+end
+
 

@@ -101,20 +101,22 @@ function Generate_system(seed_gen_system, seed_attr_system, Setting_num)
 end
 
 function Est_system(system, Num_TotalSamples, Num_trajectory, Steps_per_sample, Ts, T_Sysid, PE_power)
+    x_0 = rand(system.rng, system.Dist_x0, system.n)
     Us = zeros(system.m, Num_TotalSamples)
     Ys = zeros(system.p, Num_TotalSamples)
-    for i in 1:Num_trajectory
+    @views for i in 1:Num_trajectory
         x_0 = rand(system.rng, system.Dist_x0, system.n)
         i = Int(i)
         u_s, x_s, y_s, Timeline = Orbit_Identification_noise(system, x_0, T_Sysid, PE_power=PE_power)
         if noise_free
             u_s, x_s, y_s, Timeline = Orbit_Identification_noiseFree(system, x_0, T_Sysid)
         end
+        println("SDE has done")
 
         for j in 1:Num_Samples_per_traj
             j = Int(j)
-            Us[:, Int((i - 1) * Num_Samples_per_traj + j)] = u_s[:, Int((j - 1) * Steps_per_sample + 1)]
-            Ys[:, Int((i - 1) * Num_Samples_per_traj + j)] = y_s[:, Int((j - 1) * Steps_per_sample + 1)]
+            Us[:, Int((i - 1) * Num_Samples_per_traj + j)] .= u_s[:, Int((j - 1) * Steps_per_sample + 1)]
+            Ys[:, Int((i - 1) * Num_Samples_per_traj + j)] .= y_s[:, Int((j - 1) * Steps_per_sample + 1)]
         end
         if i % 10 == 0
             println(i, " Samples collected.")
@@ -187,6 +189,75 @@ function Est_system(system, Num_TotalSamples, Num_trajectory, Steps_per_sample, 
         V_est,
         W_half_est,
         V_half_est,
+        system.Dist_x0,
+        system.h,
+        system.y_star,
+        x_star_est,
+        u_star_est,
+        system.Sigma0,
+        system.mean_ex0,
+        n_est,
+        p_est,
+        m_est,
+        system.rng,
+    )
+    return est_system
+end
+
+function Est_discrete_system(system, Num_TotalSamples, Num_trajectory, Steps_per_sample, Ts, T_Sysid, PE_power)
+    # System identification for discrete sytem
+    x_0 = rand(system.rng, system.Dist_x0, system.n)
+    Us, Ys = Orbit_Identification_noise_succinct(system, x_0, T_Sysid, Ts=Ts, PE_power=PE_power)
+    println("Data has collected.")
+    println(Ys[1, 1:10])
+    println(Us[1, 1:10])
+    Data = iddata(Ys, Us, Ts)
+    Ys = nothing
+    Us = nothing
+    GC.gc()
+    # N4sidによるシステム同定
+    sys_disc = n4sid(Data, verbose=false, zeroD=true)
+    #sys = subspaceid(Data, system.n, verbose=false, zeroD=true)
+    println("System Identification has done")
+    Data = nothing
+    GC.gc()
+    A_est_disc, B_est_disc, C_est_disc = sys_disc.A, sys_disc.B, sys_disc.C
+    W_est_disc, V_est_disc = sys_disc.Q, sys_disc.R
+    n_est = size(A_est_disc, 1)
+    m_est = size(B_est_disc, 2)
+    p_est = size(C_est_disc, 1)
+    equib_est = [(A_est_disc-I(n_est)) B_est_disc; C_est_disc zeros(p_est, m_est)] \ [zeros(n_est); system.y_star]
+    x_star_est = equib_est[1:n_est]
+    u_star_est = equib_est[(n_est+1):(n_est+p_est)]
+
+    F_est_disc = [A_est_disc zeros((n_est, p_est)); -system.h*C_est_disc*A_est_disc I(p_est)]
+    G_est_disc = [B_est_disc; zeros((p_est, m_est))]
+    H_est_disc = [C_est_disc zeros(p_est, p_est); zeros(p_est, n_est) -I(p_est)]
+
+    #ノイズの共分散行列が半正定値行列ならば正定値に補正してあげる
+    if Real(eigmin(W_est_disc)) <= 0.0
+        W_est_disc += (-Real(eigmin(W_est_disc)) + 1e-10) * I(size(W_est_disc, 1))
+    end
+
+    if Real(eigmin(V_est_disc)) <= 0.0
+        V_est_disc += (-Real(eigmin(V_est_disc)) + 1e-10) * I(size(V_est_disc, 1))
+    end
+
+    println("minimum eigvals of W_est: ", eigmin(W_est_disc))
+    println("minimum eigvals of V_est: ", eigmin(V_est_disc))
+    V_half_est_disc = cholesky(V_est_disc).L
+    W_half_est_disc = cholesky(W_est_disc).L
+    est_system = TargetSystem(
+        A_est_disc,
+        B_est_disc,
+        C_est_disc,
+        F_est_disc,
+        G_est_disc,
+        H_est_disc,
+        W_est_disc,
+        V_est_disc,
+        W_half_est_disc,
+        V_half_est_disc,
         system.Dist_x0,
         system.h,
         system.y_star,

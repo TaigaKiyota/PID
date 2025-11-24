@@ -688,6 +688,39 @@ function Orbit_Identification_noise(system, x_0, T; PE_power=20, N=0)
     return u_s, x_s, y_s, Timeline
 end
 
+function Orbit_Identification_noise_succinct(system, x_0, T; Ts=10, PE_power=20, N=0)
+    if N == 0
+        N = Int(trunc(T / system.h))
+    end
+
+    length = Int(trunc(T / Ts))
+
+    N_persample = Int(trunc(Ts / system.h))
+
+    #x_s = zeros(system.n, length + 1)
+    #x_s[:, 1] .= x_0
+    x = x_0
+    u_s = zeros(system.m, length + 1)
+    y_s = zeros(system.p, length + 1)
+    y_s[:, 1] = system.C * x_0
+
+    @views for i in 1:length
+
+        u_input = sqrt(PE_power) * randn(system.rng, system.m)
+        u_s[:, i] .= u_input
+        for j in 1:N_persample
+            x = x + system.h * (system.A * x + system.B * u_input) +
+                sqrt(system.h) * system.W_half * randn(system.rng, system.n)
+        end
+        # Update x and z, Euler-Maruyama method
+
+        # Update y
+        y_s[:, i+1] .= system.C * x + system.V_half * randn(system.rng, system.p)
+
+    end
+    return u_s, y_s
+end
+
 function Orbit_Identification_noiseFree(system, x_0, T)
     N = T / system.h
 

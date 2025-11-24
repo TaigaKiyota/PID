@@ -10,7 +10,7 @@ include("function_orbit.jl")
 using Zygote
 using JLD2
 
-Setting_num = 5
+Setting_num = 6
 
 @load "System_setting/Noise_dynamics/Settings/Setting$Setting_num/Settings.jld2" Setting
 
@@ -25,30 +25,32 @@ system = Setting["system"]
 K_P = 1.0I(system.p)
 K_I = 1.0I(system.p)
 
-# 最適化問題のパラメータ
-Q1 = 100.0I(system.p)
-Q2 = 100.0I(system.p)
+## 最適化問題のパラメータ
+Q1 = 200.0I(system.p)
+Q2 = 20.0I(system.p)
 Q_prime = [system.C'*Q1*system.C zeros(system.n, system.p); zeros(system.p, system.n) Q2]
+Q_prime = Symmetric((Q_prime + Q_prime') / 2)
 last_value = true
-N_inner_obj = 20
 struct Problem_param
     Q1
     Q2
     Q_prime
     last_value
-    N_inner_obj
 end
-prob = Problem_param(Q1, Q2, Q_prime, last_value, N_inner_obj)
+prob = Problem_param(Q1, Q2, Q_prime, last_value)
 
 # アルゴリズムのパラメータ
-eta = 0.01 # 0.05だといい結果が出そう
-epsilon = 0.0001
+eta = 0.005 # 0.05だといい結果が出そう
+epsilon_GD = 0.0001
+epsilon_EstGrad = 0.0001
 eps_interval = 0.5
 M_interval = 5
-N_sample = 50
+N_sample = 10
+N_inner_obj = 20 #20
 N_GD = 200
-tau = 2000
+tau = 50
 r = 0.1
+delta = 0.01
 
 method_num = 3
 method_names_list = ["Onepoint_SimpleBaseline", "One_point_WithoutBase", "TwoPoint"]
@@ -56,10 +58,13 @@ method_name = method_names_list[method_num]
 # 最適化のパラメータ設定
 mutable struct Optimization_param
     eta
-    epsilon
+    epsilon_GD
+    epsilon_EstGrad
+    delta
     eps_interval
     M_interval
     N_sample
+    N_inner_obj
     N_GD
     tau
     r
@@ -68,10 +73,13 @@ end
 
 Opt = Optimization_param(
     eta,
-    epsilon,
+    epsilon_GD,
+    epsilon_EstGrad,
+    delta, #理論保証から導かれたパラメータを使用する時に使う
     eps_interval,
     M_interval,
     N_sample,
+    N_inner_obj,
     N_GD,
     tau,
     r,

@@ -6,7 +6,7 @@ using Random
 include("function_noise.jl")
 include("function_orbit.jl")
 #rng = MersenneTwister(1)
-Setting_num = 6
+Setting_num = 7
 
 
 n_dim = true
@@ -18,9 +18,9 @@ for (key, value) in Setting
     @eval $(Symbol(key)) = $value
 end
 
-Ts = system.h#サンプル間隔
+Ts = 20 * system.h#サンプル間隔
 Num_trajectory = 1 #サンプル数軌道の数
-Num_Samples_per_traj = 40000 #1つの軌道につきサンプル数個数
+Num_Samples_per_traj = 4000000 #1つの軌道につきサンプル数個数
 PE_power = 0.1 #Setting1~4までは20でやっていた．5は1
 
 
@@ -121,12 +121,21 @@ sys = n4sid(Data, system.n, verbose=true, zeroD=true)
 
 method_name = "N4SID"
 println("System Identification has done")
-cont_sys = d2c(sys)
+p = bodeplot([sysd_true[1, 1], sys.sys[1, 1]], label=["True" "n4sid"], layout=(2, 1))
+savefig(p, dir * "/Disc_Bode_N4SID_11.png")
+p = bodeplot([sysd_true[1, 2], sys.sys[1, 2]], label=["True" "n4sid"], layout=(2, 1))
+savefig(p, dir * "/Disc_Bode_N4SID_12.png")
+p = bodeplot([sysd_true[2, 1], sys.sys[2, 1]], label=["True" "n4sid"], layout=(2, 1))
+savefig(p, dir * "/Disc_Bode_N4SID_21.png")
+p = bodeplot([sysd_true[2, 2], sys.sys[2, 2]], label=["True" "n4sid"], layout=(2, 1))
+savefig(p, dir * "/Disc_Bode_N4SID_22.png")
+
+
 #println("estimated model \n", cont_sys)
 #println("sys.sys: ", cont_sys.sys)
 #println("sys.Q: ", cont_sys.Q)
 #println("sys.R: ", cont_sys.R)
-
+cont_sys = d2c(sys)
 A_est, B_est, C_est, D_est = cont_sys.A, cont_sys.B, cont_sys.C, cont_sys.D
 W_est, V_est = cont_sys.Q, cont_sys.R
 
@@ -134,13 +143,14 @@ if !isdir("test_file/Gain_result_noise/Settings/Setting$Setting_num")
     mkdir("test_file/Gain_result_noise/Settings/Setting$Setting_num")  # フォルダを作成
 end
 p = bodeplot([sysc_true[1, 1], cont_sys.sys[1, 1]], label=["True" "n4sid"], layout=(2, 1))
-savefig(p, dir * "/Bode_Ns4SID_11.png")
+savefig(p, dir * "/Cont_Bode_Ns4SID_11.png")
 p = bodeplot([sysc_true[1, 2], cont_sys.sys[1, 2]], label=["True" "n4sid"], layout=(2, 1))
-savefig(p, dir * "/Bode_N4SID_12.png")
+savefig(p, dir * "/Cont_Bode_N4SID_12.png")
 p = bodeplot([sysc_true[2, 1], cont_sys.sys[2, 1]], label=["True" "n4sid"], layout=(2, 1))
-savefig(p, dir * "Bode_N4SID_21.png")
+savefig(p, dir * "/Cont_Bode_N4SID_21.png")
 p = bodeplot([sysc_true[2, 2], cont_sys.sys[2, 2]], label=["True" "n4sid"], layout=(2, 1))
-savefig(p, dir * "/Bode_N4SID_22.png")
+savefig(p, dir * "/Cont_Bode_N4SID_22.png")
+
 
 n_est = size(A_est, 1)
 m_est = size(B_est, 2)
@@ -196,142 +206,3 @@ est_system = TargetSystem(
 
 @save "System_setting/Noise_dynamics/Settings/Setting$Setting_num/N4sid_ndim=$(n_dim)_Ts=$(Ts)_NumSample=$(Num_Samples_per_traj)/Est_matrices.jld2" est_system
 
-sys = newpem(Data, system.n, zeroD=true)
-
-method_name = "pem"
-println("System Identification has done")
-cont_sys = d2c(sys)
-#println("estimated model \n", cont_sys)
-#println("sys.sys: ", cont_sys.sys)
-#println("sys.Q: ", cont_sys.Q)
-#println("sys.R: ", cont_sys.R)
-
-A_est, B_est, C_est, D_est = cont_sys.A, cont_sys.B, cont_sys.C, cont_sys.D
-W_est, V_est = cont_sys.Q, cont_sys.R
-
-if !isdir("test_file/Gain_result_noise/Settings/Setting$Setting_num")
-    mkdir("test_file/Gain_result_noise/Settings/Setting$Setting_num")  # フォルダを作成
-end
-p = bodeplot([sysc_true[1, 1], cont_sys.sys[1, 1]], label=["True" "n4sid"], layout=(2, 1))
-savefig(p, dir * "/Bode_pem_11.png")
-p = bodeplot([sysc_true[1, 2], cont_sys.sys[1, 2]], label=["True" "n4sid"], layout=(2, 1))
-savefig(p, dir * "/Bode_pem_12.png")
-p = bodeplot([sysc_true[2, 1], cont_sys.sys[2, 1]], label=["True" "n4sid"], layout=(2, 1))
-savefig(p, dir * "Bode_pem_21.png")
-p = bodeplot([sysc_true[2, 2], cont_sys.sys[2, 2]], label=["True" "n4sid"], layout=(2, 1))
-savefig(p, dir * "/Bode_pem_22.png")
-
-# 部分空間同定法
-println("部分空間同定法")
-if n_dim
-    sys = subspaceid(Data, system.n, verbose=false, zeroD=true)
-else
-    sys = subspaceid(Data, verbose=false, zeroD=true)
-end
-ys = subspaceid(Data, system.n, verbose=false, zeroD=true)
-println("System Identification has done")
-cont_sys = d2c(sys)
-#println("estimated model \n", cont_sys)
-#println("sys.sys: ", cont_sys.sys)
-#println("sys.Q: ", cont_sys.Q)
-#println("sys.R: ", cont_sys.R)
-
-A_est, B_est, C_est, D_est = cont_sys.A, cont_sys.B, cont_sys.C, cont_sys.D
-W_est, V_est = cont_sys.Q, cont_sys.R
-
-p = bodeplot([sysc_true[1, 1], sys.sys[1, 1]], label=["True" "subspace"], layout=(2, 1))
-savefig(p, dir * "/Bode_SubspId_11.png")
-p = bodeplot([sysc_true[1, 2], sys.sys[1, 2]], label=["True" "subspace"], layout=(2, 1))
-savefig(p, dir * "/Bode_SubspId_12.png")
-p = bodeplot([sysc_true[2, 1], sys.sys[2, 1]], label=["True" "subspace"], layout=(2, 1))
-savefig(p, dir * "/Bode_SubspId_21.png")
-p = bodeplot([sysc_true[2, 2], sys.sys[2, 2]], label=["True" "subspace"], layout=(2, 1))
-savefig(p, dir * "/Bode_SubspId_22.png")
-
-n_est = size(A_est, 1)
-m_est = size(B_est, 2)
-p_est = size(C_est, 1)
-equib_est = inv([A_est B_est; C_est zeros(p_est, m_est)]) * [zeros(n_est); system.y_star]
-x_star_est = equib_est[1:n_est]
-u_star_est = equib_est[(n_est+1):(n_est+p_est)]
-
-F_est = [A_est zeros((n_est, p_est)); -C_est zeros((p_est, p_est))]
-G_est = [B_est; zeros((p_est, m_est))]
-H_est = [C_est zeros(p_est, p_est); zeros(p_est, n_est) -I(p_est)]
-
-if Real(eigmin(W_est)) <= 0.0
-    W_est += (-Real(eigmin(W_est)) + 1e-10) * I(size(W_est, 1))
-end
-
-if Real(eigmin(V_est)) <= 0.0
-    V_est += (-Real(eigmin(V_est)) + 1e-10) * I(size(V_est, 1))
-end
-V_half_est = cholesky(V_est).L
-W_half_est = cholesky(W_est).L
-rng_for_est = MersenneTwister(1011)
-est_system = TargetSystem(
-    A_est,
-    B_est,
-    C_est,
-    F_est,
-    G_est,
-    H_est,
-    W_est,
-    V_est,
-    W_half_est,
-    V_half_est,
-    system.Dist_x0,
-    system.h,
-    system.y_star,
-    x_star_est,
-    u_star_est,
-    system.Sigma0,
-    system.mean_ex0,
-    n_est,
-    p_est,
-    m_est,
-    rng_for_est,
-)
-
-if !isdir("System_setting/Noise_dynamics/Settings/Setting$Setting_num/SubspaceId_ndim=$(n_dim)_Ts=$(Ts)_NumSample=$(Num_Samples_per_traj)")
-    mkdir("System_setting/Noise_dynamics/Settings/Setting$Setting_num/SubspaceId_ndim=$(n_dim)_Ts=$(Ts)_NumSample=$(Num_Samples_per_traj)")  # フォルダを作成
-end
-
-@save "System_setting/Noise_dynamics/Settings/Setting$Setting_num/SubspaceId_ndim=$(n_dim)_Ts=$(Ts)_NumSample=$(Num_Samples_per_traj)/Est_matrices.jld2" est_system
-
-#=
-
-sys = subspaceid(Data, n, verbose=false, zeroD=true)
-println("System Identification has done")
-println("Est MarcovParam discrete: ", sys.C * (sys.A) * sys.B)
-println("True MarcovParam discrete: ", sysd_true.C * (sysd_true.A) * sysd_true.B)
-sys = d2c(sys)
-
-A_est, B_est, C_est, D_est = sys.A, sys.B, sys.C, sys.D
-println("Est MarcovParam continuous: ", C_est * (A_est) * B_est)
-println("True MarcovParam continuous: ", sysc_true.C * (sysc_true.A) * sysc_true.B)
-
-println("estimated model \n", sys)
-
-p = bodeplot([sysc_true[1, 1], sys.sys[1, 1]], label=["True" "subspace"], layout=(2, 1))
-savefig(p, "test_file/Gain_result_noise/Settings/Setting$Setting_num/Bode_SubspId_11.png")
-
-p = bodeplot([sysc_true[1, 2], sys.sys[1, 2]], label=["True" "subspace"], layout=(2, 1))
-savefig(p, "test_file/Gain_result_noise/Settings/Setting$Setting_num/Bode_SubspId_12.png")
-
-p = bodeplot([sysc_true[2, 1], sys.sys[2, 1]], label=["True" "subspace"], layout=(2, 1))
-savefig(p, "test_file/Gain_result_noise/Settings/Setting$Setting_num/Bode_SubspId_21.png")
-
-p = bodeplot([sysc_true[2, 2], sys.sys[2, 2]], label=["True" "subspace"], layout=(2, 1))
-savefig(p, "test_file/Gain_result_noise/Settings/Setting$Setting_num/Bode_SubspId_22.png")
-sys_pem = newpem(Data, n, sys0=sys)
-println("estimated model \n", sys)
-p = bodeplot([sysd_true[1, 1], sys_pem.sys[1, 1]], label=["True" "n4sid"], layout=(2, 1))
-savefig(p, "test_file/Gain_result_noise/Settings/Setting$Setting_num/Bode_PEM_N4SID_desc_11.png")
-p = bodeplot([sysd_true[1, 2], sys_pem.sys[1, 2]], label=["True" "n4sid"], layout=(2, 1))
-savefig(p, "test_file/Gain_result_noise/Settings/Setting$Setting_num/Bode_PEM_N4SID_desc_12.png")
-p = bodeplot([sysd_true[2, 1], sys_pem.sys[2, 1]], label=["True" "n4sid"], layout=(2, 1))
-savefig(p, "test_file/Gain_result_noise/Settings/Setting$Setting_num/Bode_PEM_N4SID_desc_21.png")
-p = bodeplot([sysd_true[2, 2], sys_pem.sys[2, 2]], label=["True" "n4sid"], layout=(2, 1))
-savefig(p, "test_file/Gain_result_noise/Settings/Setting$Setting_num/Bode_PEM_N4SID_desc_22.png")
-=#
