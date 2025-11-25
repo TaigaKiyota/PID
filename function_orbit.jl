@@ -697,6 +697,62 @@ function Orbit_Identification_noise_succinct(system, x_0, T; Ts=10, PE_power=20,
 
     N_persample = Int(trunc(Ts / system.h))
 
+    x = x_0
+    u_s = zeros(system.m, length + 1)
+    y_s = zeros(system.p, length + 1)
+    y_s[:, 1] = system.C * x_0
+
+    # 状態と作業用バッファを一度だけ確保
+    x = copy(x_0)
+    u_buf = zeros(eltype(x_0), system.m)
+    w_buf = zeros(eltype(x_0), system.n)  # プロセスノイズ用
+    v_buf = zeros(eltype(x_0), system.p)  # 観測ノイズ用
+    Ax_buf = similar(x_0)
+    Bu_buf = similar(x_0)
+    Wx_buf = similar(x_0)
+
+    sqrt_PE = sqrt(PE_power)
+    sqrt_h = sqrt(system.h)
+
+    @views for i in 1:length
+        # 入力ノイズ：既存バッファに randn! で書き込み
+        randn!(system.rng, u_buf)
+        @. u_buf = sqrt_PE * u_buf
+        u_s[:, i] .= u_buf
+
+        # N_persample ステップ時間発展（Euler–Maruyama）
+        for k in 1:N_persample
+            # Ax_buf = A*x, Bu_buf = B*u_buf
+            mul!(Ax_buf, system.A, x)
+            mul!(Bu_buf, system.B, u_buf)
+
+            # Wx_buf = W_half * w_buf
+            randn!(system.rng, w_buf)
+            mul!(Wx_buf, system.W_half, w_buf)
+
+            @. x += system.h * (Ax_buf + Bu_buf) + sqrt_h * Wx_buf
+        end
+
+        # 出力 y
+        randn!(system.rng, v_buf)
+        # y_col = system.C * x + V_half * v_buf を in-place で
+        y_col = view(y_s, :, i + 1)
+        mul!(y_col, system.C, x)              # y_col = C*x
+        mul!(v_buf, system.V_half, v_buf)     # v_buf = V_half * v_buf
+        @. y_col += v_buf
+    end
+    return u_s, y_s
+end
+
+function NotInPlace_Orbit_Identification_noise_succinct(system, x_0, T; Ts=10, PE_power=20, N=0)
+    if N == 0
+        N = Int(trunc(T / system.h))
+    end
+
+    length = Int(trunc(T / Ts))
+
+    N_persample = Int(trunc(Ts / system.h))
+
     #x_s = zeros(system.n, length + 1)
     #x_s[:, 1] .= x_0
     x = x_0
@@ -705,15 +761,12 @@ function Orbit_Identification_noise_succinct(system, x_0, T; Ts=10, PE_power=20,
     y_s[:, 1] = system.C * x_0
 
     @views for i in 1:length
-
         u_input = sqrt(PE_power) * randn(system.rng, system.m)
         u_s[:, i] .= u_input
         for j in 1:N_persample
             x = x + system.h * (system.A * x + system.B * u_input) +
                 sqrt(system.h) * system.W_half * randn(system.rng, system.n)
         end
-        # Update x and z, Euler-Maruyama method
-
         # Update y
         y_s[:, i+1] .= system.C * x + system.V_half * randn(system.rng, system.p)
 

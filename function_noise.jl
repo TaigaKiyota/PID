@@ -682,7 +682,7 @@ function ProjGrad_Gain_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Opt)
 end
 
 function ProjGrad_Discrete_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Opt)
-    #P制御の無限次元経過後の誤差を最小化する
+    # 離散時間モデルベース勾配降下法
     f_list = []
     Kp_list = []
     Ki_list = []
@@ -708,18 +708,20 @@ function ProjGrad_Discrete_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Op
         K_P_next = Projection_diagnal_interval(K_P_next, Opt, system)
         K_I_next = Projection_diagnal_interval(K_I_next, Opt, system)
 
-        cnt += 1
         val = ObjectiveFunction_discrete_noise(system, prob, K_P, K_I)
         #射影する
         #println(f_val)
         difference = sqrt(sum((K_P_next - K_P) .^ 2) + sum((K_I_next - K_I) .^ 2))
         if (difference < Opt.epsilon_GD * Opt.eta)
+            println(cnt)
+            println(val)
             push!(Kp_list, K_P)
             push!(Ki_list, K_I)
             push!(f_list, val)
             return Kp_list, Ki_list, f_list
         end
-        if (cnt % 50 == 0)
+        cnt += 1
+        if (cnt % 5000 == 0)
             println(cnt)
             println(val)
             #println("勾配の推定", est_grad)

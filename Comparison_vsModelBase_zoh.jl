@@ -14,7 +14,7 @@ using JLD2
 using JSON
 using Dates
 
-Setting_num = 6
+Setting_num = 9
 simulation_name = "Vanila_parameter_zoh"
 estimated_param = false
 
@@ -55,17 +55,17 @@ M_interval = 5
 norm_omega = sqrt(2 * system.p) * M_interval
 
 N_sample = 5 # 50
-N_GD = 50 # 200
+N_GD = 40 # 200
 N_inner_obj = 20 #20
 tau = 30
 r = 0.1
 
 # FF推定のためのパラメータ
-K_P_uhat = 0.3 * I(system.p)
+K_P_uhat = 0.005 * I(system.p)
 A_K_uhat = system.A - system.B * K_P_uhat * system.C
 println(eigvals(A_K_uhat))
 # tau_uのサイズの決定
-epsilon_u = 1e-5
+epsilon_u = 1e-6
 Z = lyap(A_K_uhat', I(system.n))
 eigvals_Z = eigvals(Z)
 eig_max_Z = maximum(eigvals_Z)
@@ -132,7 +132,7 @@ Opt = Optimization_param(
 
 eta_discrete = 0.0001
 epsilon_GD_discrete = 1e-5
-N_GD_discrete = 50000
+N_GD_discrete = 20000
 
 Opt_discrete = Optimization_param(
     eta_discrete,
@@ -152,13 +152,13 @@ Opt_discrete = Optimization_param(
 
 
 ## システム同定パラメータ
-Ts = 100 * system.h #サンプル間隔
+Ts = 10 * system.h #サンプル間隔
 Num_trajectory = 1 #サンプル数軌道の数
+PE_power = 20 #Setting1~4までは20でやっていた．5は1
 #Num_Samples_per_traj = Num_Samples_per_traj = 2 * N_inner_obj * N_sample * N_GD #200000 #1つの軌道につきサンプル数個数
 Num_Samples_per_traj = (2 * N_inner_obj * N_sample * N_GD * tau) / Ts
 Num_Samples_per_traj = Int(trunc(Num_Samples_per_traj))
 println("Num_Samples_per_traj: ", Num_Samples_per_traj)
-PE_power = 1 #Setting1~4までは20でやっていた．5は1
 noise_free = false
 
 Steps_per_sample = Ts / system.h
@@ -235,7 +235,9 @@ for trial in 1:Trials
         Opt_discrete)
     push!(list_Kp_seq_Sysid, Kp_seq_SysId)
     push!(list_Ki_seq_Sysid, Ki_seq_SysId)
-    push!(ustar_MBase_list, est_system.u_star)
+    push!(list_ustar_Sysid, est_system.u_star)
+    y_inf_sysid = -system.C * (system.A \ (system.B * est_system.u_star))
+    println("yの誤差 モデルベース", system.y_star - y_inf_sysid)
 
     ## FF 推定
     #ベースとなる誤差の収集
@@ -293,16 +295,16 @@ list_error_ystar_Sysid = []
 list_error_ystar_MFree = []
 for trial in 1:Trials
     ustar_sysid = list_ustar_Sysid[trial]
-    y_inf_sysid = system.C * (system.A \ (system.B * ustar_sysid))
-    push!(list_error_u_Sysid, ErrorNorm(y_inf_sysid, system.y_star, zeros(system.m)))
+    y_inf_sysid = -system.C * (system.A \ (system.B * ustar_sysid))
+    push!(list_error_ystar_Sysid, ErrorNorm(y_inf_sysid, system.y_star, zeros(system.m)))
 
     uhat = list_uhat[trial]
-    y_inf_uhat = system.C * (system.A \ (system.B * uhat))
-    push!(list_error_u_MFree, ErrorNorm(y_inf_uhat, system.y_star, zeros(system.m)))
+    y_inf_uhat = -system.C * (system.A \ (system.B * uhat))
+    push!(list_error_ystar_MFree, ErrorNorm(y_inf_uhat, system.y_star, zeros(system.m)))
 end
 
-println(list_error_ystar_MFree)
-println(list_error_ystar_Sysid)
+println(list_error_u_Sysid)
+println(list_error_u_MFree)
 
 println("yの相対誤差 提案手法", list_error_ystar_MFree)
 println("yの相対誤差 モデルベース", list_error_ystar_Sysid)

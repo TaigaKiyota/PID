@@ -217,13 +217,14 @@ function Est_discrete_system(system, Num_TotalSamples, Num_trajectory, Steps_per
     GC.gc()
     # N4sidによるシステム同定
     sys_disc = n4sid(Data, verbose=false, zeroD=true)
-    #sys = subspaceid(Data, system.n, verbose=false, zeroD=true)
+    #sys_disc = subspaceid(Data, system.n, verbose=false, zeroD=true)
     println("System Identification has done")
     Data = nothing
     GC.gc()
     A_est_disc, B_est_disc, C_est_disc = sys_disc.A, sys_disc.B, sys_disc.C
     W_est_disc, V_est_disc = sys_disc.Q, sys_disc.R
     n_est = size(A_est_disc, 1)
+    println("estimeated dimention: ", n_est)
     m_est = size(B_est_disc, 2)
     p_est = size(C_est_disc, 1)
     equib_est = [(A_est_disc-I(n_est)) B_est_disc; C_est_disc zeros(p_est, m_est)] \ [zeros(n_est); system.y_star]
