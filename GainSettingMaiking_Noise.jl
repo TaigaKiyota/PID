@@ -184,8 +184,8 @@ elseif Setting_num == 8
     Dist_x0 = Uniform(-3, 3)
 elseif Setting_num == 9
     # スパースな観測行列へ
-    n = 20
-    m = 2
+    n = 30
+    m = 4
     p = m
     sparse_num = 3
     y_star = 5 * ones(p)
@@ -278,6 +278,15 @@ Setting = Dict(
 )
 
 #println("Setting: ", Setting)
+if !isdir("System_setting")
+    mkdir("System_setting")  # フォルダを作成
+end
+if !isdir("System_setting/Noise_dynamics")
+    mkdir("System_setting/Noise_dynamics")  # フォルダを作成
+end
+if !isdir("System_setting/Noise_dynamics/Settings")
+    mkdir("System_setting/Noise_dynamics/Settings")  # フォルダを作成
+end
 if !isdir("System_setting/Noise_dynamics/Settings/Setting$Setting_num")
     mkdir("System_setting/Noise_dynamics/Settings/Setting$Setting_num")  # フォルダを作成
 end
