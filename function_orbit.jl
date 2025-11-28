@@ -774,6 +774,69 @@ function NotInPlace_Orbit_Identification_noise_succinct(system, x_0, T; Ts=10, P
     return u_s, y_s
 end
 
+function Orbit_zoh_PI(system, K_P, K_I, u_hat, x_0, T; Ts=10, N=0)
+    if N == 0
+        N = Int(trunc(T / system.h))
+    end
+
+    length = Int(trunc(T / Ts))
+
+    N_persample = Int(trunc(Ts / system.h))
+
+    #x_s = zeros(system.n, length + 1)
+    #x_s[:, 1] .= x_0
+    x = x_0
+    u_s = zeros(system.m, N + 1)
+    y_s = zeros(system.p, N + 1)
+    z_s = zeros(system.p, N + 1)
+    y = system.C * x_0
+    y_s[:, 1] .= y
+    z = zeros(system.p)
+
+    @views for i in 1:length
+        u_input = K_P * (system.y_star - copy(y)) + K_I * z + u_hat
+        for j in 1:N_persample
+            x = x + system.h * (system.A * x + system.B * u_input) +
+                sqrt(system.h) * system.W_half * randn(system.rng, system.n)
+            y = system.C * x + system.V_half * randn(system.rng, system.p)
+            y_s[:, (i-1)*N_persample+j+1] .= y
+            u_s[:, (i-1)*N_persample+j+1] .= u_input
+            z_s[:, (i-1)*N_persample+j+1] .= z
+        end
+        # Update Integrator
+        z = z + (system.y_star - copy(y))
+    end
+    return u_s, y_s, z_s
+end
+
+function Orbit_continuous_PI(system, K_P, K_I, u_hat, x_0, T)
+    N = Int(trunc(T / system.h))
+
+    #x_s = zeros(system.n, length + 1)
+    #x_s[:, 1] .= x_0
+    x = x_0
+    u_s = zeros(system.m, N + 1)
+    y_s = zeros(system.p, N + 1)
+    z_s = zeros(system.p, N + 1)
+    y = system.C * x_0
+    y_s[:, 1] .= y
+    z = zeros(system.p)
+    sqrt_h = sqrt(system.h)
+
+    @views for i in 1:N
+        u_input = K_P * (system.y_star - copy(y)) + K_I * z + u_hat
+        x = x + system.h * (system.A * x + system.B * u_input) +
+            sqrt_h * system.W_half * randn(system.rng, system.n)
+        y = system.C * x + system.V_half * randn(system.rng, system.p)
+        z = z + system.h * (system.y_star - copy(y))
+        y_s[:, i+1] .= y
+        u_s[:, i+1] .= u_input
+        z_s[:, i+1] .= z
+        # Update Integrator
+    end
+    return u_s, y_s, z_s
+end
+
 function Orbit_Identification_noiseFree(system, x_0, T)
     N = T / system.h
 
@@ -797,3 +860,4 @@ function Orbit_Identification_noiseFree(system, x_0, T)
     end
     return u_s, x_s, y_s, Timeline
 end
+

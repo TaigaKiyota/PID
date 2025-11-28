@@ -205,7 +205,7 @@ function Est_system(system, Num_TotalSamples, Num_trajectory, Steps_per_sample, 
 end
 
 function Est_discrete_system(system, Num_TotalSamples, Num_trajectory, Steps_per_sample, Ts, T_Sysid, PE_power)
-    # System identification for discrete sytem
+    # System identification for discrete system
     x_0 = rand(system.rng, system.Dist_x0, system.n)
     Us, Ys = Orbit_Identification_noise_succinct(system, x_0, T_Sysid, Ts=Ts, PE_power=PE_power)
     println("Data has collected.")
@@ -231,7 +231,7 @@ function Est_discrete_system(system, Num_TotalSamples, Num_trajectory, Steps_per
     x_star_est = equib_est[1:n_est]
     u_star_est = equib_est[(n_est+1):(n_est+p_est)]
 
-    F_est_disc = [A_est_disc zeros((n_est, p_est)); -system.h*C_est_disc*A_est_disc I(p_est)]
+    F_est_disc = [A_est_disc zeros((n_est, p_est)); -C_est_disc*A_est_disc I(p_est)]
     G_est_disc = [B_est_disc; zeros((p_est, m_est))]
     H_est_disc = [C_est_disc zeros(p_est, p_est); zeros(p_est, n_est) -I(p_est)]
 
@@ -272,4 +272,55 @@ function Est_discrete_system(system, Num_TotalSamples, Num_trajectory, Steps_per
         system.rng,
     )
     return est_system
+end
+
+function ZOH_discrete_system(system, Ts)
+    A_disc = exp(system.A * Ts)
+    B_disc = (exp(system.A * Ts) - I(system.n)) * (system.A \ system.B)
+
+    equib_disc = [(A_disc-I(system.n)) B_disc; system.C zeros(system.p, system.m)] \ [zeros(system.n); system.y_star]
+    x_star_disc = equib_disc[1:system.n]
+    u_star_disc = equib_disc[(system.n+1):(system.n+system.p)]
+
+    F_disc = [A_disc zeros((system.n, system.p)); -system.C*A_disc I(system.p)]
+    G_disc = [B_disc; zeros((system.p, system.m))]
+    H_disc = [system.C zeros(system.p, system.p); zeros(system.p, system.n) -I(system.p)]
+
+    W_0 = lyap(system.A, system.W)
+    W_h = lyap(system.A, exp(system.A * Ts) * system.W * exp(system.A' * Ts))
+    W_disc = W_0 - W_h
+    W_disc = (W_disc + W_disc') / 2
+
+    #ノイズの共分散行列が半正定値行列ならば正定値に補正してあげる
+    if Real(eigmin(W_disc)) <= 0.0
+        W_disc += (-Real(eigmin(W_disc)) + 1e-10) * I(size(W_disc, 1))
+    end
+
+    println("minimum eigvals of W_disc: ", eigmin(W_disc))
+
+    W_half_disc = cholesky(W_disc).L
+    system_disc = TargetSystem(
+        A_disc,
+        B_disc,
+        system.C,
+        F_disc,
+        G_disc,
+        H_disc,
+        W_disc,
+        system.V,
+        W_half_disc,
+        system.V_half,
+        system.Dist_x0,
+        system.h,
+        system.y_star,
+        x_star_disc,
+        u_star_disc,
+        system.Sigma0,
+        system.mean_ex0,
+        system.n,
+        system.p,
+        system.m,
+        system.rng,
+    )
+    return system_disc
 end

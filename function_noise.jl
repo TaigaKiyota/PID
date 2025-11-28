@@ -49,6 +49,48 @@ function ObjectiveFunction_discrete_noise(system, prob, K_P, K_I)
     return sum(X .* prob.Q_prime) + sum(prob.Q1 .* system.V)
 end
 
+function ObjectiveFunction_zoh_noise(system, system_disc, prob, K_P, K_I, Ts)
+    A_zoh = [system.F system.G; zeros((system.m, system.n + system.p + system.m))]
+    Q_zoh_pre = [prob.Q_prime zeros((system.n + system.p, system.m)); zeros((system.m, system.n + system.p + system.m))]
+    #=
+    integration_step = 1e-6
+    Num_int = trunc(Ts / integration_step)
+    Q_zoh = zeros((system.n + system.p + system.m, system.n + system.p + system.m))
+    for i in 0:Num_int
+        time = i * integration_step
+        if i == 0 || i == Num_int
+            Q_zoh += exp(A_zoh' * time) * Q_zoh_pre * exp(A_zoh * time)
+        else
+            Q_zoh += 2 * exp(A_zoh' * time) * Q_zoh_pre * exp(A_zoh * time)
+        end
+    end
+    Q_zoh = integration_step * Q_zoh / 2
+    K = [K_P K_I]
+    K_aug = [I(system.p + system.n); K * system_disc.H]
+    Q_zoh = K_aug' * Q_zoh * K_aug
+    =#
+    all_dim = system.p + system.m + system.n
+    M = [-A_zoh' Q_zoh_pre;
+        zeros(all_dim, all_dim) A_zoh]
+
+    EM = exp(M * Ts)   # 2n × 2n の行列指数
+
+    # ブロックを取り出す
+    M12 = EM[1:all_dim, all_dim+1:2*all_dim]
+    M22 = EM[all_dim+1:2*all_dim, all_dim+1:2*all_dim]
+
+    Q_zoh = M22' * M12
+    K = [K_P K_I]
+    K_aug = [I(system.p + system.n); K * system_disc.H]
+    Q_zoh = K_aug' * Q_zoh * K_aug
+
+    F_K = system_disc.F - system_disc.G * [K_P K_I] * system_disc.H
+    BK_P = system_disc.B * K_P
+    W_tilde = [system_disc.W+BK_P*system_disc.V*BK_P' BK_P*system_disc.V; system_disc.V*BK_P' system_disc.V]
+    X = lyapd(F_K, W_tilde)
+    return sum(X .* Q_zoh) + sum(prob.Q1 .* system_disc.V)
+end
+
 function stability_margin(system, K_P, K_I)
     F_K = system.F - system.G * [K_P K_I] * system.H
     eig_closedloop = eigvals(F_K)
@@ -216,6 +258,38 @@ function obj_trunc_from_traj(system, prob, y_s, z_s, tau)
     obj *= system.h
     obj /= tau
     return obj
+end
+
+# ZOHの軌道での目的関数のシミュレーション平均
+function obj_mean_zoh(system, prob, K_P, K_I, u_hat, Ts, tau, Iteration_obj)
+    mean_obj = 0
+    for iter in 1:Iteration_obj
+        x_0 = rand(system.rng, system.Dist_x0, system.n)
+        u_s, y_s, z_s = Orbit_zoh_PI(system, K_P, K_I, u_hat, x_0, tau, Ts=Ts)
+        u_s = nothing
+        GC.gc()
+        mean_obj = mean_obj + obj_trunc_from_traj(system, prob, y_s, z_s, tau)
+        y_s = nothing
+        z_s = nothing
+        GC.gc()
+    end
+    return mean_obj / Iteration_obj
+end
+
+# 連続時間制御器での目的関数のシミュレーション平均
+function obj_mean_continuous(system, prob, K_P, K_I, u_hat, tau, Iteration_obj)
+    mean_obj = 0
+    for iter in 1:Iteration_obj
+        x_0 = rand(system.rng, system.Dist_x0, system.n)
+        u_s, y_s, z_s = Orbit_continuous_PI(system, K_P, K_I, u_hat, x_0, tau)
+        u_s = nothing
+        GC.gc()
+        mean_obj = mean_obj + obj_trunc_from_traj(system, prob, y_s, z_s, tau)
+        y_s = nothing
+        z_s = nothing
+        GC.gc()
+    end
+    return mean_obj / Iteration_obj
 end
 
 #軌道を受け取って，有限打ち切り目的関数のtau倍を計算

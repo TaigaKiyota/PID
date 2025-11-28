@@ -13,8 +13,9 @@ using JLD2
 using JSON
 using Dates
 
-Setting_num = 7
-simulation_name = "Vanila_parameter"
+Setting_num = 10
+#simulation_name = "Vanila_parameter"
+simulation_name = "test"
 estimated_param = false
 
 @load "System_setting/Noise_dynamics/Settings/Setting$Setting_num/Settings.jld2" Setting
@@ -154,6 +155,10 @@ if !isdir(dir)
     mkdir(dir)  # フォルダを作成
 end
 
+# 結果の参照のためのパラメータ
+tau_eval = 2
+Iteration_obj_eval = 1
+
 ## パラメータの保存
 params = Dict(
     "Q1" => Q1,
@@ -176,6 +181,8 @@ params = Dict(
     "Num_trajectory" => Num_trajectory, #サンプル数軌道の数
     "Num_Samples_per_traj" => Num_Samples_per_traj,
     "PE_power" => PE_power,
+    "tau_eval" => tau_eval,
+    "iteration_obj_eval" => Iteration_obj_eval,
     "date" => Dates.now(),
 )
 
@@ -370,9 +377,11 @@ for trial in 1:Trials
     Obj_seq_SysId = []
     for i in 1:Opt.N_GD
         if i <= (size(list_Kp_seq_ModelFree[trial], 1))
-            Obj_MFree_uhat = ObjectiveFunction_noise(system, prob, (list_Kp_seq_ModelFree[trial])[i], (list_Ki_seq_ModelFree[trial])[i])
+            Obj_MFree_uhat = obj_mean_continuous(system, prob, (list_Kp_seq_ModelFree[trial])[i], (list_Ki_seq_ModelFree[trial])[i],
+                u_hat, tau_simulate, Iteration_obj)
         else
-            Obj_MFree_uhat = ObjectiveFunction_noise(system, prob, (list_Kp_seq_ModelFree[trial])[end], (list_Ki_seq_ModelFree[trial])[end])
+            Obj_MFree_uhat = obj_mean_continuous(system, prob, (list_Kp_seq_ModelFree[trial])[end], (list_Ki_seq_ModelFree[trial])[end],
+                u_hat, tau_simulate, Iteration_obj)
         end
 
         if i <= (size(list_Kp_seq_Sysid[trial], 1))

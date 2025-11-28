@@ -15,7 +15,7 @@ using JSON
 using Dates
 
 Setting_num = 10
-simulation_name = "Vanila_parameter_zoh"
+simulation_name = "FF_Vanila_parameter2_zoh"
 estimated_param = false
 
 
@@ -26,46 +26,14 @@ system = Setting["system"]
 
 n_dim = true # システム同定の際に状態空間の次元を情報として与えるか
 
-Trials = 2
-## 初期点のゲイン
-K_P = 1.0I(system.p)
-K_I = 1.0I(system.p)
-
-## 最適化問題のパラメータ
-Q1 = 200.0I(system.p)
-Q2 = 20.0I(system.p)
-Q_prime = [system.C'*Q1*system.C zeros(system.n, system.p); zeros(system.p, system.n) Q2]
-Q_prime = Symmetric((Q_prime + Q_prime') / 2)
-last_value = true
-struct Problem_param
-    Q1
-    Q2
-    Q_prime
-    last_value
-end
-prob = Problem_param(Q1, Q2, Q_prime, last_value)
-
-## アルゴリズムのパラメータ
-eta = 0.005 # 0.05だといい結果が出そう
-epsilon_GD = 1e-16
-delta = 0.05 # 確率のパラメータ
-eps_interval = 0.3
-M_interval = 5
-
-norm_omega = sqrt(2 * system.p) * M_interval
-
-N_sample = 5 # 50
-N_GD = 40 # 200
-N_inner_obj = 20 #20
-tau = 40
-r = 0.1
+Trials = 20
 
 # FF推定のためのパラメータ
 K_P_uhat = 0.005 * I(system.p)
 A_K_uhat = system.A - system.B * K_P_uhat * system.C
 println(eigvals(A_K_uhat))
 # tau_uのサイズの決定
-epsilon_u = 1e-6
+epsilon_u = 1e-3
 Z = lyap(A_K_uhat', I(system.n))
 eigvals_Z = eigvals(Z)
 eig_max_Z = maximum(eigvals_Z)
@@ -73,90 +41,12 @@ eig_min_Z = minimum(eigvals_Z)
 tau_u = 2 * eig_max_Z * log(sqrt(system.m * system.p) * norm(system.C, 2) * norm(inv(A_K_uhat'), 2) * norm(system.B, 2) * eig_max_Z / (eig_min_Z * epsilon_u))
 println("Estimated tau_u: ", tau_u)
 
-# 理論保証によって導かれたアルゴリズムのパラメータ
-obj_init = ObjectiveFunction_noise(system, prob, K_P, K_I)
-stab = stability_margin(system, K_P, K_I) #初期点の安定余裕できんじ
-epsilon_EstGrad = 1e-1
-if estimated_param
-    r, tau, tau_u, N_sample, N_inner_obj = Algo_params(system,
-        prob,
-        epsilon_EstGrad,
-        obj_init,
-        delta,
-        norm_omega,
-        K_P_uhat,
-        stab)
-    println("理論保証から導かれたパラメータ")
-else
-    println("手動で決定したパラメータ")
-end
-println("r: ", r)
-println("tau: ", tau)
-println("tau_u: ", tau_u)
-println("N_sample: ", N_sample)
-println("N_inner_obj: ", N_inner_obj)
-
-method_num = 3
-method_names_list = ["Onepoint_SimpleBaseline", "One_point_WithoutBase", "TwoPoint"]
-method_name = method_names_list[method_num]
-## 最適化のパラメータ設定
-mutable struct Optimization_param
-    eta
-    epsilon_GD
-    epsilon_EstGrad
-    delta
-    eps_interval
-    M_interval
-    N_sample
-    N_inner_obj
-    N_GD
-    tau
-    r
-    method_name
-end
-
-Opt = Optimization_param(
-    eta,
-    epsilon_GD,
-    epsilon_EstGrad,
-    delta, #理論保証から導かれたパラメータを使用する時に使う
-    eps_interval,
-    M_interval,
-    N_sample,
-    N_inner_obj,
-    N_GD,
-    tau,
-    r,
-    method_name
-)
-
-eta_discrete = 0.0001
-epsilon_GD_discrete = 1e-5
-N_GD_discrete = 20000
-
-Opt_discrete = Optimization_param(
-    eta_discrete,
-    epsilon_GD_discrete,
-    epsilon_EstGrad,
-    delta, #理論保証から導かれたパラメータを使用する時に使う
-    eps_interval,
-    M_interval,
-    N_sample,
-    N_inner_obj,
-    N_GD_discrete,
-    tau,
-    r,
-    method_name
-)
-
-
 
 ## システム同定パラメータ
 Ts = 10 * system.h #サンプル間隔
 Num_trajectory = 1 #サンプル数軌道の数
 PE_power = 20 #Setting1~4までは20でやっていた．5は1
-#Num_Samples_per_traj = Num_Samples_per_traj = 2 * N_inner_obj * N_sample * N_GD #200000 #1つの軌道につきサンプル数個数
-Num_Samples_per_traj = (2 * N_inner_obj * N_sample * N_GD * tau) / Ts
+Num_Samples_per_traj = (system.m + 1) * tau_u / Ts
 Num_Samples_per_traj = Int(trunc(Num_Samples_per_traj))
 println("Num_Samples_per_traj: ", Num_Samples_per_traj)
 noise_free = false
@@ -177,38 +67,16 @@ if !isdir(dir)
     mkdir(dir)  # フォルダを作成
 end
 
-
-# 結果の参照のためのパラメータ
-tau_eval = 2000
-Iteration_obj_eval = 200
-
 ## パラメータの保存
 params = Dict(
-    "Q1" => Q1,
-    "Q2" => Q2,
-    "N_inner_obj" => N_inner_obj,
-    "eta" => eta,
-    "eta_discrete" => eta_discrete,
-    "epsilon_GD" => epsilon_GD,
-    "epsilon_GD_discrete" => epsilon_GD_discrete,
-    "epsilon_EstGrad" => epsilon_EstGrad,
-    "delta" => delta,
-    "eps_interval" => eps_interval,
-    "M_interval" => M_interval,
-    "N_sample" => N_sample,
-    "N_GD" => N_GD,
-    "N_GD_discrete" => N_GD_discrete,
-    "tau" => tau,
-    "r" => r,
-    "method_name" => method_name,
+    "Trials" => Trials,
     "K_P_uhat" => K_P_uhat,
     "epsilon_u" => epsilon_u,
+    "tau_u" => tau_u,
     "Ts" => Ts,
     "Num_trajectory" => Num_trajectory, #サンプル数軌道の数
     "Num_Samples_per_traj" => Num_Samples_per_traj,
     "PE_power" => PE_power,
-    "tau_eval" => tau_eval,
-    "iteration_obj_eval" => Iteration_obj_eval,
     "date" => Dates.now(),
 )
 
@@ -232,19 +100,9 @@ for trial in 1:Trials
     println("trial: ", trial)
     ## システム同定
     est_system = Est_discrete_system(system, Num_TotalSamples, Num_trajectory, Steps_per_sample, Ts, T_Sysid, PE_power)
-    # システム同定によるゲイン最適化
-    Q_prime_sysid = [est_system.C'*Q1*est_system.C zeros(est_system.n, est_system.p); zeros(est_system.p, est_system.n) Q2]
-    prob_sysid = Problem_param(Q1, Q2, Q_prime_sysid, last_value)
-    Kp_seq_SysId, Ki_seq_SysId, _ = ProjGrad_Discrete_Conststep_ModelBased_Noise(K_P,
-        K_I,
-        est_system,
-        prob_sysid,
-        Opt_discrete)
-    push!(list_Kp_seq_Sysid, Kp_seq_SysId)
-    push!(list_Ki_seq_Sysid, Ki_seq_SysId)
-    push!(list_ustar_Sysid, est_system.u_star)
     y_inf_sysid = -system.C * (system.A \ (system.B * est_system.u_star))
     println("yの誤差 モデルベース", system.y_star - y_inf_sysid)
+    push!(list_ustar_Sysid, est_system.u_star)
 
     ## FF 推定
     #ベースとなる誤差の収集
@@ -267,18 +125,13 @@ for trial in 1:Trials
 
         Ematrix[:, i] = error_i - error_zero
     end
-    u_hat = -Ematrix' * inv(Ematrix * Ematrix') * error_zero
+    u_hat = -Ematrix' * ((Ematrix * Ematrix') \ error_zero)
 
     println("推定したフィードフォワード: ", u_hat)
     println("uの平衡点, 正解のフィードフォワード: ", system.u_star)
     println("Difference: ", u_hat - system.u_star)
     println("error: ", sqrt(sum((u_hat - system.u_star) .^ 2)))
     push!(list_uhat, u_hat)
-
-    ## モデルフリー最適化
-    Kp_seq_MFree_uhat, Ki_seq_MFree_uhat, _ = ProjectGradient_Gain_Conststep_Noise(K_P, K_I, u_hat, system, prob, Opt)
-    push!(list_Kp_seq_ModelFree, Kp_seq_MFree_uhat)
-    push!(list_Ki_seq_ModelFree, Ki_seq_MFree_uhat)
 end
 ## 結果の保存
 @save dir * "/list_ustar_Sysid.jld2" list_ustar_Sysid
@@ -318,27 +171,9 @@ println("yの相対誤差 モデルベース", list_error_ystar_Sysid)
 
 boxplot(list_error_u_MFree, label="Model Free")
 boxplot!(list_error_u_Sysid, label="System Identification")
-savefig(dir * "/FF_error_boxplot.png")
+savefig(dir * "/FF_ustar_error_boxplot.png")
 
+boxplot(list_error_ystar_MFree, label="Model Free")
+boxplot!(list_error_ystar_Sysid, label="System Identification")
+savefig(dir * "/FF_y_error_boxplot.png")
 
-## ゲイン最適化の結果表示
-
-list_obj_MFree = []
-list_obj_SysId = []
-for trial in 1:Trials
-    Obj_MFree_uhat = obj_mean_continuous(system, prob, (list_Kp_seq_ModelFree[trial])[end], (list_Ki_seq_ModelFree[trial])[end],
-        system.u_star, tau_eval, Iteration_obj_eval)
-
-    Obj_SysId = obj_mean_continuous(system, prob,
-        (list_Kp_seq_ModelFree[trial])[end], (list_Ki_seq_ModelFree[trial])[end],
-        system.u_star, tau_eval, Iteration_obj_eval)
-    push!(list_obj_MFree, Obj_MFree_uhat)
-    push!(list_obj_SysId, Obj_SysId)
-end
-
-boxplot(list_obj_MFree, label="Model Free")
-boxplot!(list_obj_SysId, label="System Identification")
-savefig(dir * "/Gain_MeanObj_boxplot.png")
-
-@save dir * "/list_obj_MFree.jld2" list_obj_MFree
-@save dir * "/list_obj_SysId.jld2" list_obj_SysId
