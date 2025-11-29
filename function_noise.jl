@@ -619,14 +619,25 @@ function ProjGrad_Discrete_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Op
 
     while cnt < Opt.N_GD
 
-        grad_P, grad_I = grad_discrete_noise(system, prob, K_P, K_I)
-        grad_P = diag(grad_P)
-        grad_I = diag(grad_I)
-        K_P_next = K_P - Opt.eta * diagm(grad_P)
-        K_I_next = K_I - Opt.eta * diagm(grad_I)
-
-        K_P_next = Projection_diagnal_interval(K_P_next, Opt, system)
-        K_I_next = Projection_diagnal_interval(K_I_next, Opt, system)
+        if Opt.projection == "diag"
+            grad_P, grad_I = grad_discrete_noise(system, prob, K_P, K_I)
+            K_P_next = K_P - eta * diagm(grad_P)
+            K_I_next = K_I - eta * diagm(grad_I)
+            K_P_next = Projection_diagnal_interval(K_P_next, Opt, system)
+            K_I_next = Projection_diagnal_interval(K_I_next, Opt, system)
+        elseif Opt.projection == "Eigvals"
+            grad_P, grad_I = grad_discrete_noise(system, prob, K_P, K_I)
+            K_P_next = K_P - eta * grad_P
+            K_I_next = K_I - eta * grad_I
+            K_P_next = Projection_eigenvalues_interval(K_P_next, Opt)
+            K_I_next = Projection_eigenvalues_interval(K_I_next, Opt)
+        elseif Opt.projection == "Frobenius"
+            grad_P, grad_I = grad_discrete_noise(system, prob, K_P, K_I)
+            K_P_next = K_P - eta * grad_P
+            K_I_next = K_I - eta * grad_I
+            K_P_next = clip_frobenius(K_P_next, Opt)
+            K_I_next = clip_frobenius(K_I_next, Opt)
+        end
 
         val = ObjectiveFunction_discrete_noise(system, prob, K_P, K_I)
         #射影する
