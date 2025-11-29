@@ -774,7 +774,11 @@ function NotInPlace_Orbit_Identification_noise_succinct(system, x_0, T; Ts=10, P
     return u_s, y_s
 end
 
-function Orbit_zoh_PI(system, K_P, K_I, u_hat, x_0, T; Ts=10, N=0)
+function Orbit_zoh_PI(system, K_P, K_I, u_hat, x_0, T; Ts=10, N=0, h=0)
+    if h == 0
+        h = system.h
+    end
+
     if N == 0
         N = Int(trunc(T / system.h))
     end
@@ -793,11 +797,13 @@ function Orbit_zoh_PI(system, K_P, K_I, u_hat, x_0, T; Ts=10, N=0)
     y_s[:, 1] .= y
     z = zeros(system.p)
 
+    sqrt_h = sqrt(h)
+
     @views for i in 1:length
         u_input = K_P * (system.y_star - copy(y)) + K_I * z + u_hat
         for j in 1:N_persample
-            x = x + system.h * (system.A * x + system.B * u_input) +
-                sqrt(system.h) * system.W_half * randn(system.rng, system.n)
+            x = x + h * (system.A * x + system.B * u_input) +
+                sqrt_h * system.W_half * randn(system.rng, system.n)
             y = system.C * x + system.V_half * randn(system.rng, system.p)
             y_s[:, (i-1)*N_persample+j+1] .= y
             u_s[:, (i-1)*N_persample+j+1] .= u_input
@@ -809,7 +815,10 @@ function Orbit_zoh_PI(system, K_P, K_I, u_hat, x_0, T; Ts=10, N=0)
     return u_s, y_s, z_s
 end
 
-function Orbit_continuous_PI(system, K_P, K_I, u_hat, x_0, T)
+function Orbit_continuous_PI(system, K_P, K_I, u_hat, x_0, T; h=0)
+    if h == 0
+        h = system.h
+    end
     N = Int(trunc(T / system.h))
 
     #x_s = zeros(system.n, length + 1)
@@ -821,14 +830,14 @@ function Orbit_continuous_PI(system, K_P, K_I, u_hat, x_0, T)
     y = system.C * x_0
     y_s[:, 1] .= y
     z = zeros(system.p)
-    sqrt_h = sqrt(system.h)
+    sqrt_h = sqrt(h)
 
     @views for i in 1:N
         u_input = K_P * (system.y_star - copy(y)) + K_I * z + u_hat
-        x = x + system.h * (system.A * x + system.B * u_input) +
+        x = x + h * (system.A * x + system.B * u_input) +
             sqrt_h * system.W_half * randn(system.rng, system.n)
         y = system.C * x + system.V_half * randn(system.rng, system.p)
-        z = z + system.h * (system.y_star - copy(y))
+        z = z + h * (system.y_star - copy(y))
         y_s[:, i+1] .= y
         u_s[:, i+1] .= u_input
         z_s[:, i+1] .= z

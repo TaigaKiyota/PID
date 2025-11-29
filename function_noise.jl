@@ -25,6 +25,24 @@ mutable struct TargetSystem
     rng
 end
 
+# 最適化のパラメータ設定
+mutable struct Optimization_param
+    eta
+    epsilon_GD
+    epsilon_EstGrad
+    delta
+    eps_interval
+    M_interval
+    N_sample
+    N_inner_obj
+    N_GD
+    tau
+    r
+    projection #制約領域をどのようにするか
+    method_name
+end
+
+
 # 値の有限性を検査（数値でも配列でもOK）
 function check_finite(x, name::AbstractString)
     ok = isa(x, Number) ? isfinite(x) : all(isfinite, x)
@@ -155,6 +173,10 @@ function obj_lastvalue(system, prob, K_P, K_I, x_0, reset, tau)
     Var_path = X_infty - X_tau
     Variance = Var_init + Var_path
     Variance = (Variance + Variance') / 2
+    if Real(eigmin(Variance)) <= 0.0
+        println(eigvals(Variance))
+        println(eigvals(F_K))
+    end
     Var_harf = cholesky(Variance).L
 
     equib = F_K \ system.G * (reset - system.u_star)
@@ -292,219 +314,7 @@ function obj_mean_continuous(system, prob, K_P, K_I, u_hat, tau, Iteration_obj)
     return mean_obj / Iteration_obj
 end
 
-#軌道を受け取って，有限打ち切り目的関数のtau倍を計算
-function TauObj_trunc_from_traj(system, prob, y_s, z_s, tau)
-    Nstep = Int(tau / system.h)
-    e_s = y_s .- system.y_star
-    e_s = -e_s
-    Obj_param_mat = [prob.Q1 zeros(system.p, system.p); zeros(system.p, system.p) prob.Q2]
-
-    vec = [e_s[:, 1]; z_s[:, 1]]
-    obj = (vec' * Obj_param_mat * vec) / 3
-    @simd for j in 2:(Nstep-1)
-        vec = [e_s[:, Int(j)]; z_s[:, Int(j)]]
-        if j % 2 == 1
-            obj += 4 * (vec' * Obj_param_mat * vec) / 3
-        else
-            obj += 2 * (vec' * Obj_param_mat * vec) / 3
-        end
-    end
-    vec = [e_s[:, Nstep]; z_s[:, Nstep]]
-
-    obj += (vec' * Obj_param_mat * vec) / 3
-    obj *= system.h
-
-    return obj
-end
-
-
-# ベースラインの用意のために，最小二乗法のためのデータをサンプル．
-# この関数では一つの軌道から一つの軌道データを取り出す．制御開始から最初の数秒のみを使う．
-function Sample_for_baseline_1traj1obj(system, prob, K_P, K_I, reset, h_samp, D_base)
-    # 最初のサンプリング期間(D_base  * h_samp)におけるベクトルを計算する（errors_prior)
-    # 軌道をサンプリング．期間は(2*D_base*h_samp)まで
-    terminal_baseline = D_base * h_samp
-    x_0 = rand(system.rng, system.Dist_x0, system.n)
-    z_0 = randn(system.rng, system.p)
-    _, y_s, z_s, _, _, _ = Orbit_PI_noise(system, K_P, K_I, x_0, z_0, 2 * terminal_baseline, reset)
-    interval_samp = Int(h_samp / system.h)
-    errors_prior = zeros(D_base * 2 * system.p) #D個errorのサンプルを撮る
-    for j in 1:(D_base)
-        error = y_s[:, interval_samp*(j-1)+1] - system.y_star
-        errors_prior[(j-1)*2*system.p+1:(j*2*system.p)] = [error; z_s[:, interval_samp*(j-1)+1]]
-    end
-
-    errors_prior = kron(errors_prior, errors_prior)
-
-    errors_post = zeros(D_base * 2 * system.p) #D個errorのサンプルを撮る
-    for j in 1:(D_base)
-        error = y_s[:, interval_samp*D_base+interval_samp*(j-1)+1] - system.y_star
-        errors_post[(j-1)*2*system.p+1:(j*2*system.p)] = [error; z_s[:, interval_samp*D_base+interval_samp*(j-1)+1]]
-    end
-    errors_post = kron(errors_post, errors_post)
-    errors = errors_prior - errors_post
-
-    obj_s = TauObj_trunc_from_traj(system, prob, y_s, z_s, terminal_baseline)
-
-    return errors, obj_s
-end
-
-
-
-# ベースライン計算のための行列PのvecPを返す
-# Truncated 目的関数をtau倍したもののベースラインをつくる．
-# 一つの軌道から一つのデータを生成し，複数回軌道を回してデータをサンプル
-function Baseline_vecP_1traj1obj(system, prob, K_P, K_I, reset, h_samp, D_base, N_base)
-    E_mat = zeros(N_base, (D_base * 2 * system.p)^2) #Pのベクトル化が列に並ぶ
-    vals = zeros(N_base) #各サンプルごとの目的関数ち
-    for i in 1:N_base
-        errors, obj_s = Sample_for_baseline_1traj1obj(system, prob, K_P, K_I, reset, h_samp, D_base)
-        E_mat[i, :] = errors
-        vals[i] = obj_s
-    end
-    vecP = E_mat \ vals
-    return vecP
-end
-
-function baseline_grad_obj_1traj_allobj(F_K, G, K_M, x_equib, u_equib, reset, h_samp, D_base, N_base, rng, Dist_x0)
-    #何回かサンプルしてex(0)' * P *ex(0) =obj_trunc(ex(0))を満たすようなPを求めてあげたい．
-    E_mat = zeros(N_base, (D_base * system.p)^2) #Pのベクトル化が列に並ぶ
-    vals = zeros(N_base) #各サンプルごとの目的関数ち
-    for i in 1:N_base
-        errors, obj_s = Compute_ErrBar(system, reset, h_samp, D_base)
-        E_mat[i, :] = errors
-        vals[i] = obj_s
-    end
-    vecP = E_mat \ vals
-    return vecP
-end
-
-function obj_trunc_Base(system, prob, K_P, K_I, x_0, reset, tau, h_samp, D_base, base_vecP)
-    #目的関数とベースラインの計算
-    z_0 = zeros(system.p)
-    terminal_baseline = D_base * h_samp
-    interval_samp = Int(h_samp / system.h)
-    #軌道のサンプリング
-    _, y_s, z_s, _, _, _ = Orbit_PI_noise(system, K_P, K_I, x_0, z_0, tau + terminal_baseline, reset)
-    errors_base1 = zeros(D_base * 2 * system.p)
-    for j in 1:(D_base)
-        error = y_s[:, interval_samp*(j-1)+1] - system.y_star
-        errors_base1[(j-1)*2*system.p+1:(j*2*system.p)] = [error; z_s[:, interval_samp*(j-1)+1]]
-    end
-    errors_base1 = kron(errors_base1, errors_base1)
-
-    steps_tau = Int(tau / system.h)
-
-    errors_base2 = zeros(D_base * 2 * system.p)
-    for j in 1:(D_base)
-        error = y_s[:, steps_tau+interval_samp*(j-1)+1] - system.y_star
-        errors_base2[(j-1)*2*system.p+1:(j*2*system.p)] = [error; z_s[:, steps_tau+interval_samp*(j-1)+1]]
-    end
-    errors_base2 = kron(errors_base2, errors_base2)
-
-    #目的関数の計算
-    obj = obj_trunc_from_traj(system, prob, y_s, z_s, tau)
-    base = (errors_base1 - errors_base2)' * base_vecP
-    base /= tau
-
-    return obj, base
-end
-
-
-
-function grad_obj_est_Base(K_P, K_I, system, N_sample, reset, tau, r, D_base, h_samp)
-    """
-    モデルフリーな勾配の推定ほう
-    ベクトル形式の勾配を返す．
-    """
-
-    grad_Ps = zeros(system.p, N_sample)
-    grad_Is = zeros(system.p, N_sample)
-
-    grad_P = zeros(system.p)
-    grad_I = zeros(system.p)
-
-    Sphere_samples = randn(system.rng, Float64, (N_sample, 2 * system.p)) # 球面上のノイズ作成のためのガウシアンノイズ
-
-    #D_base = 2 * (system.n + system.p - 1) + 20
-    #h_samp = 2 * system.h
-
-    N_base = Int((system.n + system.p) * (system.n + system.p + 1) / 2) #ベースライン計算に何回反復するか
-
-    base_vecP = Baseline_vecP_1traj1obj(system, prob, K_P, K_I, reset, h_samp, D_base, N_base)
-
-    @simd for i in 1:N_sample
-        #zp = Sphere_samples[i, :]
-
-        zp = Sphere_samples[i, :]
-        zp = zp / norm(zp)
-        zp = zp * sqrt(2 * system.p)
-        U_P = zp[1:system.p]
-        U_I = zp[(system.p+1):(2*system.p)]
-        x_0 = rand(system.rng, system.Dist_x0, system.n)
-        #ある初期点からの摂動を入れたゲインでの目的関数の計算，　
-        cost, base = obj_trunc_Base(system, prob, K_P + r * diagm(U_P), K_I + r * diagm(U_I), x_0, reset, tau, h_samp, D_base, base_vecP)
-
-        grad_P += (cost - base) .* U_P
-        grad_I += (cost - base) .* U_I
-
-        grad_Ps[:, i] = grad_P ./ (r * i)
-        grad_Is[:, i] = grad_I ./ (r * i)
-    end
-    grad_P = grad_P ./ (r * N_sample)
-    grad_I = grad_I ./ (r * N_sample)
-
-    return grad_P, grad_I, grad_Ps, grad_Is
-end
-
-function grad_obj_est_WithoutBase(K_P, K_I, system, N_sample, reset, tau, r)
-    """
-    モデルフリーな勾配の推定ほう
-    ベクトル形式の勾配を返す．
-    """
-
-    grad_Ps = zeros(system.p, N_sample)
-    grad_Is = zeros(system.p, N_sample)
-
-    grad_P = zeros(system.p)
-    grad_I = zeros(system.p)
-
-    Sphere_samples = randn(system.rng, Float64, (N_sample, 2 * system.p))
-    for i in 1:N_sample
-        zp = Sphere_samples[i, :]
-        zp = zp / norm(zp)
-        zp = zp * sqrt(2 * system.p)
-        U_P = zp[1:system.p]
-        U_I = zp[(system.p+1):(2*system.p)]
-
-        #ある初期点からの摂動を入れたゲインでの目的関数の計算，
-        cost = 0
-        if prob.last_value == false
-            for j in 1:Opt.N_inner_obj
-                x_0 = rand(system.rng, system.Dist_x0, system.n)
-                cost += obj_trunc(system, prob, K_P + r * diagm(U_P), K_I + r * diagm(U_I), x_0, reset, tau)
-            end
-        else
-            for j in 1:Opt.N_inner_obj
-                x_0 = rand(system.rng, system.Dist_x0, system.n)
-                cost += obj_lastvalue(system, prob, K_P + r * diagm(U_P), K_I + r * diagm(U_I), x_0, reset, tau)
-            end
-        end
-        cost /= Opt.N_inner_obj
-
-        grad_P += cost .* U_P
-        grad_I += cost .* U_I
-
-        grad_Ps[:, i] = grad_P ./ (r * i)
-        grad_Is[:, i] = grad_I ./ (r * i)
-    end
-    grad_P = grad_P ./ (r * N_sample)
-    grad_I = grad_I ./ (r * N_sample)
-
-    return grad_P, grad_I, grad_Ps, grad_Is
-end
-
-function grad_est_TwoPoint(K_P, K_I, system, prob, Opt, reset)
+function grad_est_TwoPoint_diag(K_P, K_I, system, prob, Opt, reset)
     """
     モデルフリーな勾配の推定ほう
     ベクトル形式の勾配を返す．
@@ -567,63 +377,58 @@ function grad_est_TwoPoint(K_P, K_I, system, prob, Opt, reset)
     return grad_P, grad_I, grad_Ps, grad_Is
 end
 
-function grad_est_SimpleBaseline(K_P, K_I, system, N_sample, reset, tau, r)
+function grad_est_TwoPoint(K_P, K_I, system, prob, Opt, reset)
     """
     モデルフリーな勾配の推定ほう
     ベクトル形式の勾配を返す．
     """
 
-    grad_Ps = zeros(system.p, N_sample)
-    grad_Is = zeros(system.p, N_sample)
+    grad_Ps = zeros(system.m, system.p, Opt.N_sample)
+    grad_Is = zeros(system.m, system.p, Opt.N_sample)
 
-    grad_P = zeros(system.p)
-    grad_I = zeros(system.p)
+    grad_P = zeros(system.m, system.p,)
+    grad_I = zeros(system.m, system.p,)
 
-    Sphere_samples = randn(system.rng, Float64, (N_sample, 2 * system.p))
-    Sphere_samples = randn(system.rng, Float64, (N_sample, 2 * system.p))
-
-    base = 0
-    for i in Opt.N_inner_obj
-        x_0 = rand(system.rng, system.Dist_x0, system.n)
-        base += obj_lastvalue(system, prob, K_P, K_I, x_0, reset, tau)
-    end
-    base /= Opt.N_inner_obj
-
-    for i in 1:N_sample
+    Sphere_samples = randn(system.rng, Float64, (Opt.N_sample, 2 * system.m * system.p))
+    for i in 1:Opt.N_sample
         zp = Sphere_samples[i, :]
 
         zp = zp / norm(zp)
-        zp = zp * sqrt(2 * system.p)
-        U_P = zp[1:system.p]
-        U_I = zp[(system.p+1):(2*system.p)]
+        zp = zp * sqrt(2 * system.m * system.p)
+        U_P = zp[1:system.m*system.p]
+        U_P = reshape(U_P, (system.m, system.p))
+        #U_P = (U_P + U_P') / 2
+        U_I = zp[system.m*system.p+1:end]
+        U_I = reshape(U_I, (system.m, system.p))
+        #U_I = (U_I + U_I') / 2
         x_0 = rand(system.rng, system.Dist_x0, system.n)
         #ある初期点からの摂動を入れたゲインでの目的関数の計算，
-        cost = 0.0
-
-        if prob.last_value == false
-            for i in 1:Opt.N_inner_obj
-                x_0 = rand(system.rng, system.Dist_x0, system.n)
-                cost += obj_trunc(system, prob, K_P + r * diagm(U_P), K_I + r * diagm(U_I), x_0, reset, tau)
-            end
-        else
-            for i in 1:Opt.N_inner_obj
-                x_0 = rand(system.rng, system.Dist_x0, system.n)
-                cost += obj_lastvalue(system, prob, K_P + r * diagm(U_P), K_I + r * diagm(U_I), x_0, reset, tau)
-            end
+        cost1 = 0
+        cost2 = 0
+        for i in 1:Opt.N_inner_obj
+            x_0 = rand(system.rng, system.Dist_x0, system.n)
+            cost1 += obj_lastvalue(system, prob, K_P + Opt.r * U_P, K_I + Opt.r * U_I, x_0, reset, Opt.tau)
         end
-        cost /= float(Opt.N_inner_obj)
+        cost1 /= Opt.N_inner_obj
 
-        grad_P += (cost - base) .* U_P
-        grad_I += (cost - base) .* U_I
+        for i in 1:Opt.N_inner_obj
+            x_0 = rand(system.rng, system.Dist_x0, system.n)
+            cost2 += obj_lastvalue(system, prob, K_P - Opt.r * U_P, K_I - Opt.r * U_I, x_0, reset, Opt.tau)
+        end
+        cost2 /= Opt.N_inner_obj
 
-        grad_Ps[:, i] = grad_P ./ (r * i)
-        grad_Is[:, i] = grad_I ./ (r * i)
+        grad_P += (cost1 - cost2) .* U_P
+        grad_I += (cost1 - cost2) .* U_I
+
+        grad_Ps[:, :, i] .= grad_P ./ (2.0 * Opt.r * i)
+        grad_Is[:, :, i] .= grad_I ./ (2.0 * Opt.r * i)
     end
-    grad_P = grad_P ./ (r * N_sample)
-    grad_I = grad_I ./ (r * N_sample)
+    grad_P = grad_P ./ (Opt.r * Opt.N_sample)
+    grad_I = grad_I ./ (Opt.r * Opt.N_sample)
 
     return grad_P, grad_I, grad_Ps, grad_Is
 end
+
 
 function Projection_diagnal_interval(K, Opt, system)
     for i in 1:system.p
@@ -634,6 +439,34 @@ function Projection_diagnal_interval(K, Opt, system)
         end
     end
     return K
+end
+
+function Projection_eigenvalues_interval(K, Opt)
+    K = (K + K') / 2
+
+    F = eigen(K)                # 対称行列なので固有値は実数
+    eigs = F.values
+    Q = F.vectors
+
+    # 固有値を [a,b] にクリップ
+    eigs_clipped = clamp.(eigs, Opt.eps_interval, Opt.M_interval)
+
+    # Q * Diagonal(λ_clipped) * Q' で再構成
+    P = Q * Diagonal(eigs_clipped) * Q'
+
+    # 明示的に対称として扱いたいなら Symmetric を付ける
+    return Symmetric(P)
+end
+
+function clip_frobenius(A, Opt)
+    nA = norm(A)
+    if nA >= Opt.M_interval
+        return (Opt.M_interval / nA) * A
+    elseif nA <= Opt.eps_interval
+        return (Opt.eps_interval / nA) * A
+    else
+        return A
+    end
 end
 
 function ProjectGradient_Gain_Conststep_Noise(K_P, K_I, reset, system, prob, Opt)
@@ -654,20 +487,25 @@ function ProjectGradient_Gain_Conststep_Noise(K_P, K_I, reset, system, prob, Opt
     push!(f_list, val)
 
     while cnt < Opt.N_GD
-
-        if Opt.method_name == "One_point_WithoutBase"
-            grad_P, grad_I, _, _ = grad_obj_est_WithoutBase(K_P, K_I, system, Opt.N_sample, reset, Opt.tau, Opt.r)
-        elseif Opt.method_name == "TwoPoint"
+        if Opt.projection == "diag"
+            grad_P, grad_I, _, _ = grad_est_TwoPoint_diag(K_P, K_I, system, prob, Opt, reset)
+            K_P_next = K_P - eta * diagm(grad_P)
+            K_I_next = K_I - eta * diagm(grad_I)
+            K_P_next = Projection_diagnal_interval(K_P_next, Opt, system)
+            K_I_next = Projection_diagnal_interval(K_I_next, Opt, system)
+        elseif Opt.projection == "Eigvals"
             grad_P, grad_I, _, _ = grad_est_TwoPoint(K_P, K_I, system, prob, Opt, reset)
-        elseif Opt.method_name == "Onepoint_SimpleBaseline"
-            grad_P, grad_I, _, _ = grad_est_SimpleBaseline(K_P, K_I, system, Opt.N_sample, reset, Opt.tau, Opt.r)
+            K_P_next = K_P - eta * grad_P
+            K_I_next = K_I - eta * grad_I
+            K_P_next = Projection_eigenvalues_interval(K_P_next, Opt)
+            K_I_next = Projection_eigenvalues_interval(K_I_next, Opt)
+        elseif Opt.projection == "Frobenius"
+            grad_P, grad_I, _, _ = grad_est_TwoPoint(K_P, K_I, system, prob, Opt, reset)
+            K_P_next = K_P - eta * grad_P
+            K_I_next = K_I - eta * grad_I
+            K_P_next = clip_frobenius(K_P_next, Opt)
+            K_I_next = clip_frobenius(K_I_next, Opt)
         end
-
-        K_P_next = K_P - eta * diagm(grad_P)
-        K_I_next = K_I - eta * diagm(grad_I)
-
-        K_P_next = Projection_diagnal_interval(K_P_next, Opt, system)
-        K_I_next = Projection_diagnal_interval(K_I_next, Opt, system)
 
         cnt += 1
         val = ObjectiveFunction_noise(system, prob, K_P, K_I)
@@ -697,9 +535,6 @@ function ProjectGradient_Gain_Conststep_Noise(K_P, K_I, reset, system, prob, Opt
     return Kp_list, Ki_list, f_list
 end
 
-
-
-
 function ProjGrad_Gain_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Opt)
     #P制御の無限次元経過後の誤差を最小化する
     f_list = []
@@ -719,14 +554,25 @@ function ProjGrad_Gain_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Opt)
     while cnt < Opt.N_GD
 
         grad_P, grad_I = grad_noise(system, prob, K_P, K_I)
-        grad_P = diag(grad_P)
-        grad_I = diag(grad_I)
-        K_P_next = K_P - eta * diagm(grad_P)
-        K_I_next = K_I - eta * diagm(grad_I)
-
-        K_P_next = Projection_diagnal_interval(K_P_next, Opt, system)
-        K_I_next = Projection_diagnal_interval(K_I_next, Opt, system)
-
+        if Opt.projection == "diag"
+            grad_P, grad_I = grad_noise(system, prob, K_P, K_I)
+            K_P_next = K_P - eta * diagm(grad_P)
+            K_I_next = K_I - eta * diagm(grad_I)
+            K_P_next = Projection_diagnal_interval(K_P_next, Opt, system)
+            K_I_next = Projection_diagnal_interval(K_I_next, Opt, system)
+        elseif Opt.projection == "Eigvals"
+            grad_P, grad_I = grad_noise(system, prob, K_P, K_I)
+            K_P_next = K_P - eta * grad_P
+            K_I_next = K_I - eta * grad_I
+            K_P_next = Projection_eigenvalues_interval(K_P_next, Opt)
+            K_I_next = Projection_eigenvalues_interval(K_I_next, Opt)
+        elseif Opt.projection == "Frobenius"
+            grad_P, grad_I = grad_noise(system, prob, K_P, K_I)
+            K_P_next = K_P - eta * grad_P
+            K_I_next = K_I - eta * grad_I
+            K_P_next = clip_frobenius(K_P_next, Opt)
+            K_I_next = clip_frobenius(K_I_next, Opt)
+        end
         cnt += 1
         val = ObjectiveFunction_noise(system, prob, K_P, K_I)
         #射影する
@@ -738,7 +584,7 @@ function ProjGrad_Gain_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Opt)
             push!(f_list, val)
             return Kp_list, Ki_list, f_list
         end
-        if (cnt % 50 == 0)
+        if (cnt % 10 == 0)
             println(cnt)
             println(val)
             #println("勾配の推定", est_grad)

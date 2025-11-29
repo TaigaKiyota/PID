@@ -14,8 +14,8 @@ using JLD2
 using JSON
 using Dates
 
-Setting_num = 10
-simulation_name = "Vanila_parameter_zoh"
+Setting_num = 6
+simulation_name = "Vanila_parameter2_zoh"
 estimated_param = false
 
 
@@ -26,7 +26,7 @@ system = Setting["system"]
 
 n_dim = true # システム同定の際に状態空間の次元を情報として与えるか
 
-Trials = 2
+Trials = 20
 ## 初期点のゲイン
 K_P = 1.0I(system.p)
 K_I = 1.0I(system.p)
@@ -50,15 +50,15 @@ eta = 0.005 # 0.05だといい結果が出そう
 epsilon_GD = 1e-16
 delta = 0.05 # 確率のパラメータ
 eps_interval = 0.3
-M_interval = 5
+M_interval = 3
 
 norm_omega = sqrt(2 * system.p) * M_interval
 
-N_sample = 5 # 50
+N_sample = 20 # 50
 N_GD = 40 # 200
 N_inner_obj = 20 #20
-tau = 40
-r = 0.1
+tau = 20
+r = 0.09
 
 # FF推定のためのパラメータ
 K_P_uhat = 0.005 * I(system.p)
@@ -99,21 +99,11 @@ println("N_inner_obj: ", N_inner_obj)
 method_num = 3
 method_names_list = ["Onepoint_SimpleBaseline", "One_point_WithoutBase", "TwoPoint"]
 method_name = method_names_list[method_num]
+
+projection_num = 3
+projection_list = ["diag", "Eigvals", "Frobenius"]
+projection = projection_list[projection_num]
 ## 最適化のパラメータ設定
-mutable struct Optimization_param
-    eta
-    epsilon_GD
-    epsilon_EstGrad
-    delta
-    eps_interval
-    M_interval
-    N_sample
-    N_inner_obj
-    N_GD
-    tau
-    r
-    method_name
-end
 
 Opt = Optimization_param(
     eta,
@@ -127,6 +117,7 @@ Opt = Optimization_param(
     N_GD,
     tau,
     r,
+    projection,
     method_name
 )
 
@@ -146,13 +137,14 @@ Opt_discrete = Optimization_param(
     N_GD_discrete,
     tau,
     r,
+    projection,
     method_name
 )
 
 
 
 ## システム同定パラメータ
-Ts = 10 * system.h #サンプル間隔
+Ts = 0.004 #サンプル間隔
 Num_trajectory = 1 #サンプル数軌道の数
 PE_power = 20 #Setting1~4までは20でやっていた．5は1
 #Num_Samples_per_traj = Num_Samples_per_traj = 2 * N_inner_obj * N_sample * N_GD #200000 #1つの軌道につきサンプル数個数
@@ -179,7 +171,7 @@ end
 
 
 # 結果の参照のためのパラメータ
-tau_eval = 2000
+tau_eval = 100
 Iteration_obj_eval = 200
 
 ## パラメータの保存
@@ -201,6 +193,7 @@ params = Dict(
     "tau" => tau,
     "r" => r,
     "method_name" => method_name,
+    "projection" => projection,
     "K_P_uhat" => K_P_uhat,
     "epsilon_u" => epsilon_u,
     "Ts" => Ts,

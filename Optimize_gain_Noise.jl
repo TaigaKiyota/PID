@@ -11,11 +11,11 @@ include("function_SomeSetting.jl")
 using Zygote
 using JLD2
 
-Setting_num = 10
+Setting_num = 6
 
 @load "System_setting/Noise_dynamics/Settings/Setting$Setting_num/Settings.jld2" Setting
 
-dir_path = "System_setting/Noise_dynamics/Settings/Setting$Setting_num/test_FF"
+dir_path = "System_setting/Noise_dynamics/Settings/Setting$Setting_num/test_Gain"
 if !isdir(dir_path)
     mkdir(dir_path)  # フォルダを作成
 end
@@ -23,12 +23,12 @@ end
 system = Setting["system"]
 
 # 初期点のゲイン
-K_P = 1.0I(system.p)
-K_I = 1.0I(system.p)
+K_P = 2.0 * I(system.p)
+K_I = 2.0 * I(system.p)
 
 ## 最適化問題のパラメータ
 Q1 = 200.0I(system.p)
-Q2 = 20.0I(system.p)
+Q2 = 5.0I(system.p)
 Q_prime = [system.C'*Q1*system.C zeros(system.n, system.p); zeros(system.p, system.n) Q2]
 Q_prime = Symmetric((Q_prime + Q_prime') / 2)
 last_value = true
@@ -43,7 +43,7 @@ prob = Problem_param(Q1, Q2, Q_prime, last_value)
 Ts = 10 * system.h
 system_disc = ZOH_discrete_system(system, Ts)
 
-
+#=
 F_K = system_disc.F - system_disc.G * [K_P K_I] * system_disc.H
 println("Eigvals of closed_loop_discrete: ", abs.(eigvals(F_K)))
 obj_zoh = ObjectiveFunction_zoh_noise(system, system_disc, prob, K_P, K_I, Ts)
@@ -58,39 +58,28 @@ println("シミュレーションベースの目的関数の計算")
 #println("zoh objective: ", obj_zoh)
 continuous_zoh = obj_mean_continuous(system, prob, K_P, K_I, u_hat, tau_simulate, Iteration_obj)
 println("continuous objective: ", continuous_zoh)
-
+=#
 
 # アルゴリズムのパラメータ
 eta = 0.005 # 0.05だといい結果が出そう
 epsilon_GD = 0.0001
 epsilon_EstGrad = 0.0001
-eps_interval = 0.5
-M_interval = 5
-N_sample = 10
+eps_interval = 0.3
+M_interval = 3
+N_sample = 20
 N_inner_obj = 20 #20
 N_GD = 40
-tau = 50
-r = 0.1
+tau = 25
+r = 0.09
 delta = 0.01
 
 method_num = 3
 method_names_list = ["Onepoint_SimpleBaseline", "One_point_WithoutBase", "TwoPoint"]
 method_name = method_names_list[method_num]
-# 最適化のパラメータ設定
-mutable struct Optimization_param
-    eta
-    epsilon_GD
-    epsilon_EstGrad
-    delta
-    eps_interval
-    M_interval
-    N_sample
-    N_inner_obj
-    N_GD
-    tau
-    r
-    method_name
-end
+
+projection_num = 2
+projection_list = ["diag", "Eigvals", "Frobenius"]
+projection = projection_list[projection_num]
 
 Opt = Optimization_param(
     eta,
@@ -104,6 +93,7 @@ Opt = Optimization_param(
     N_GD,
     tau,
     r,
+    projection,
     method_name
 )
 
@@ -159,8 +149,47 @@ println(ErrorNorm(y_inf_uhat, system.y_star, zeros(system.m)))
 
 println("\n Optimization with u_hat")
 Kp_list_MFree_uhat, Ki_list_MFree_uhat, _ = ProjectGradient_Gain_Conststep_Noise(K_P, K_I, u_hat, system, prob, Opt)
+Kp_list_MBase_uhat, Ki_list_MBase_uhat, _ = ProjGrad_Gain_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Opt)
 
+K_P_Mfree = Kp_list_MFree_uhat[end]
+K_I_Mfree = Ki_list_MFree_uhat[end]
+println("ModelFree Kp: ", K_P_Mfree)
+println("ModelFree Ki: ", K_I_Mfree)
 
+K_P_MBase = Kp_list_MBase_uhat[end]
+K_I_MBase = Ki_list_MBase_uhat[end]
+println("ModelBase Kp: ", K_P_MBase)
+println("ModelBase Ki: ", K_I_MBase)
+
+h = 1e-5
+T = 5
+x_0 = zeros(system.n)
+_, y_s_hat, _ = Orbit_continuous_PI(system, K_P_Mfree, K_I_Mfree, u_hat, x_0, T, h=h)
+_, y_s_MBase, _ = Orbit_continuous_PI(system, K_P_MBase, K_I_MBase, system.u_star, x_0, T, h=h)
+Timeline = 0:system.h:T
+
+plotting = plot(legendfontsize=18, tickfontsize=15, guidefont=18)
+plot!(plotting, Timeline[1:end], y_s_hat[1, 1:end], labels="Proposed Method", lw=1.8, lc=:red)
+plot!(plotting, Timeline[1:end], y_s_MBase[1, 1:end], labels="ModelBase", lw=1.8, lc=:blue)
+hline!(plotting, system.y_star, label=L"y^{\star}", lc=:black, lw=3)
+xlims!(0, T)
+#ylims!(-1, 6)
+xlabel!("Time")
+ylabel!(L"y")
+savefig(plotting, dir_path * "/Compare_Gain_estimatedFF.png")
+
+for i in 1:system.p
+    plotting = plot(legendfontsize=15, tickfontsize=15, legend=:right, guidefont=22)
+    plot!(plotting, Timeline[1:end], y_s_hat[i, 1:end], labels="Proposed Method", lw=2, lc=:red)
+    plot!(plotting, Timeline[1:end], y_s_MBase[i, 1:end], labels="ModelBase", lw=2, lc=:blue)
+    hline!(plotting, system.y_star, label=L"y^{\star}", lc=:black, lw=4)
+    xlims!(0, T)
+    #ylims!(-3, 8)
+    xlabel!(L"t")
+    ylabel!(L"y(t)")
+    savefig(plotting, dir_path * "/Compare_Gain_component$(i).png")
+end
+#=
 # システム同定+モデルベースアルゴリズム
 ## システム同定パラメータ
 Ts = 10 * system.h #サンプル間隔
@@ -217,3 +246,4 @@ plot!(plotting, Obj_list_MFree_uhat, labels="Model-Free_uhat", lc=:green)
 xlabel!("Iteration")
 ylabel!(L"f(K)")
 savefig(plotting, dir * "/ObjVal_ndim=$(n_dim)_Ts=$(Ts)_IdSample=$(Num_Samples_per_traj)_Nsample=$(N_sample)_Ninner=$(N_inner_obj).png")
+=#

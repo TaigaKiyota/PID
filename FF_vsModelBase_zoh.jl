@@ -14,7 +14,7 @@ using JLD2
 using JSON
 using Dates
 
-Setting_num = 10
+Setting_num = 6
 simulation_name = "FF_Vanila_parameter2_zoh"
 estimated_param = false
 
@@ -33,7 +33,7 @@ K_P_uhat = 0.005 * I(system.p)
 A_K_uhat = system.A - system.B * K_P_uhat * system.C
 println(eigvals(A_K_uhat))
 # tau_uのサイズの決定
-epsilon_u = 1e-3
+epsilon_u = 1e-6
 Z = lyap(A_K_uhat', I(system.n))
 eigvals_Z = eigvals(Z)
 eig_max_Z = maximum(eigvals_Z)
@@ -43,7 +43,7 @@ println("Estimated tau_u: ", tau_u)
 
 
 ## システム同定パラメータ
-Ts = 10 * system.h #サンプル間隔
+Ts = 0.0040 #サンプル間隔
 Num_trajectory = 1 #サンプル数軌道の数
 PE_power = 20 #Setting1~4までは20でやっていた．5は1
 Num_Samples_per_traj = (system.m + 1) * tau_u / Ts

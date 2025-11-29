@@ -228,7 +228,7 @@ elseif Setting_num == 10
     W = 0.001 * Rand_w
     Randmat_p = randn(rng, Float64, (p, p))
     Rand_p = Randmat_p * Randmat_p'
-    V = 0.0001 * Rand_p
+    V = 0.0005 * Rand_p
     h = 0.0001
     Dist_x0 = Uniform(-3, 3)
 end
