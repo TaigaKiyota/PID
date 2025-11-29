@@ -15,7 +15,7 @@ using JSON
 using Dates
 
 Setting_num = 6
-simulation_name = "FF_Vanila_parameter2_zoh"
+simulation_name = "FF_Test_parameter_zoh"
 estimated_param = false
 
 
@@ -26,14 +26,14 @@ system = Setting["system"]
 
 n_dim = true # システム同定の際に状態空間の次元を情報として与えるか
 
-Trials = 20
+Trials = 5
 
 # FF推定のためのパラメータ
-K_P_uhat = 0.005 * I(system.p)
+K_P_uhat = 0.001 * I(system.p)
 A_K_uhat = system.A - system.B * K_P_uhat * system.C
 println(eigvals(A_K_uhat))
 # tau_uのサイズの決定
-epsilon_u = 1e-6
+epsilon_u = 1e-3
 Z = lyap(A_K_uhat', I(system.n))
 eigvals_Z = eigvals(Z)
 eig_max_Z = maximum(eigvals_Z)
@@ -43,7 +43,7 @@ println("Estimated tau_u: ", tau_u)
 
 
 ## システム同定パラメータ
-Ts = 0.0040 #サンプル間隔
+Ts = 0.01 #サンプル間隔
 Num_trajectory = 1 #サンプル数軌道の数
 PE_power = 20 #Setting1~4までは20でやっていた．5は1
 Num_Samples_per_traj = (system.m + 1) * tau_u / Ts

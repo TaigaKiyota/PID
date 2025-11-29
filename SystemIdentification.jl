@@ -92,7 +92,7 @@ function snr_from_output_svd(Y, i, nx)
     return SNRdB, nx, s
 end
 sSNRdB, nx, s = snr_from_output_svd(Ys, 50, system.n)
-println("Top20 singular val of HankelY: ", s[1:20])
+println("Top50 singular val of HankelY: ", s[1:50])
 
 if !isdir("System_setting/Noise_dynamics/Settings/Setting$Setting_num/N4sid_ndim=$(n_dim)_Ts=$(Ts)_NumSample=$(Num_Samples_per_traj)")
     mkdir("System_setting/Noise_dynamics/Settings/Setting$Setting_num/N4sid_ndim=$(n_dim)_Ts=$(Ts)_NumSample=$(Num_Samples_per_traj)")  # フォルダを作成

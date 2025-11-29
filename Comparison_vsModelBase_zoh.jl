@@ -54,8 +54,8 @@ M_interval = 3
 
 norm_omega = sqrt(2 * system.p) * M_interval
 
-N_sample = 20 # 50
-N_GD = 40 # 200
+N_sample = 10 # 50
+N_GD = 30 # 200
 N_inner_obj = 20 #20
 tau = 20
 r = 0.09
@@ -147,8 +147,10 @@ Opt_discrete = Optimization_param(
 Ts = 0.004 #サンプル間隔
 Num_trajectory = 1 #サンプル数軌道の数
 PE_power = 20 #Setting1~4までは20でやっていた．5は1
+accuracy = "Float32"
 #Num_Samples_per_traj = Num_Samples_per_traj = 2 * N_inner_obj * N_sample * N_GD #200000 #1つの軌道につきサンプル数個数
 Num_Samples_per_traj = (2 * N_inner_obj * N_sample * N_GD * tau) / Ts
+#Num_Samples_per_traj = 5000
 Num_Samples_per_traj = Int(trunc(Num_Samples_per_traj))
 println("Num_Samples_per_traj: ", Num_Samples_per_traj)
 noise_free = false
@@ -200,6 +202,7 @@ params = Dict(
     "Num_trajectory" => Num_trajectory, #サンプル数軌道の数
     "Num_Samples_per_traj" => Num_Samples_per_traj,
     "PE_power" => PE_power,
+    "accuracy" => accuracy,
     "tau_eval" => tau_eval,
     "iteration_obj_eval" => Iteration_obj_eval,
     "date" => Dates.now(),
@@ -224,7 +227,14 @@ list_Ki_seq_ModelFree = []
 for trial in 1:Trials
     println("trial: ", trial)
     ## システム同定
-    est_system = Est_discrete_system(system, Num_TotalSamples, Num_trajectory, Steps_per_sample, Ts, T_Sysid, PE_power)
+    est_system = Est_discrete_system(system,
+        Num_TotalSamples,
+        Num_trajectory,
+        Steps_per_sample,
+        Ts,
+        T_Sysid,
+        PE_power,
+        accuracy=accuracy)
     # システム同定によるゲイン最適化
     Q_prime_sysid = [est_system.C'*Q1*est_system.C zeros(est_system.n, est_system.p); zeros(est_system.p, est_system.n) Q2]
     prob_sysid = Problem_param(Q1, Q2, Q_prime_sysid, last_value)

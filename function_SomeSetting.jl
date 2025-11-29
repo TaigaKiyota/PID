@@ -204,10 +204,23 @@ function Est_system(system, Num_TotalSamples, Num_trajectory, Steps_per_sample, 
     return est_system
 end
 
-function Est_discrete_system(system, Num_TotalSamples, Num_trajectory, Steps_per_sample, Ts, T_Sysid, PE_power)
+function Est_discrete_system(system, Num_TotalSamples, Num_trajectory, Steps_per_sample, Ts, T_Sysid, PE_power; accuracy="Float64")
     # System identification for discrete system
     x_0 = rand(system.rng, system.Dist_x0, system.n)
-    Us, Ys = Orbit_Identification_noise_succinct(system, x_0, T_Sysid, Ts=Ts, PE_power=PE_power)
+    if accuracy == "Float64"
+        Us, Ys = Orbit_Identification_noise_succinct(system,
+            x_0,
+            T_Sysid,
+            Ts=Ts,
+            PE_power=PE_power)
+    elseif accuracy == "Float32"
+        Us, Ys = Orbit_Identification_noise_Float32(system,
+            x_0,
+            T_Sysid,
+            Ts=Ts,
+            PE_power=PE_power)
+    end
+
     println("Data has collected.")
     println(Ys[1, 1:10])
     println(Us[1, 1:10])

@@ -66,10 +66,10 @@ epsilon_GD = 0.0001
 epsilon_EstGrad = 0.0001
 eps_interval = 0.3
 M_interval = 3
-N_sample = 20
+N_sample = 10
 N_inner_obj = 20 #20
 N_GD = 40
-tau = 25
+tau = 15
 r = 0.09
 delta = 0.01
 
