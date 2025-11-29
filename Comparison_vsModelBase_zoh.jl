@@ -57,15 +57,15 @@ norm_omega = sqrt(2 * system.p) * M_interval
 N_sample = 10 # 50
 N_GD = 30 # 200
 N_inner_obj = 20 #20
-tau = 20
+tau = 15
 r = 0.09
 
 # FF推定のためのパラメータ
-K_P_uhat = 0.005 * I(system.p)
+K_P_uhat = 0.001 * I(system.p)
 A_K_uhat = system.A - system.B * K_P_uhat * system.C
 println(eigvals(A_K_uhat))
 # tau_uのサイズの決定
-epsilon_u = 1e-6
+epsilon_u = 1e-3
 Z = lyap(A_K_uhat', I(system.n))
 eigvals_Z = eigvals(Z)
 eig_max_Z = maximum(eigvals_Z)
@@ -100,7 +100,7 @@ method_num = 3
 method_names_list = ["Onepoint_SimpleBaseline", "One_point_WithoutBase", "TwoPoint"]
 method_name = method_names_list[method_num]
 
-projection_num = 3
+projection_num = 2
 projection_list = ["diag", "Eigvals", "Frobenius"]
 projection = projection_list[projection_num]
 ## 最適化のパラメータ設定
@@ -144,7 +144,7 @@ Opt_discrete = Optimization_param(
 
 
 ## システム同定パラメータ
-Ts = 0.004 #サンプル間隔
+Ts = 0.01 #サンプル間隔
 Num_trajectory = 1 #サンプル数軌道の数
 PE_power = 20 #Setting1~4までは20でやっていた．5は1
 accuracy = "Float32"
