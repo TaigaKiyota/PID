@@ -1,5 +1,8 @@
 include("function_noise.jl")
 include("function_orbit.jl")
+using ControlSystemIdentification, ControlSystemsBase
+using Random
+
 function Generate_system(seed_gen_system, seed_attr_system, Setting_num)
     rng_system = MersenneTwister(seed_gen_system)
     if Setting_num == 6

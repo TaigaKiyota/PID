@@ -28,7 +28,7 @@ K_I = 2.0 * I(system.p)
 
 ## 最適化問題のパラメータ
 Q1 = 200.0I(system.p)
-Q2 = 5.0I(system.p)
+Q2 = 20.0I(system.p)
 Q_prime = [system.C'*Q1*system.C zeros(system.n, system.p); zeros(system.p, system.n) Q2]
 Q_prime = Symmetric((Q_prime + Q_prime') / 2)
 last_value = true
@@ -66,7 +66,7 @@ epsilon_GD = 0.0001
 epsilon_EstGrad = 0.0001
 eps_interval = 0.3
 M_interval = 3
-N_sample = 10
+N_sample = 15
 N_inner_obj = 20 #20
 N_GD = 40
 tau = 15
@@ -189,33 +189,70 @@ for i in 1:system.p
     ylabel!(L"y(t)")
     savefig(plotting, dir_path * "/Compare_Gain_component$(i).png")
 end
-#=
+
 # システム同定+モデルベースアルゴリズム
 ## システム同定パラメータ
-Ts = 10 * system.h #サンプル間隔
+Ts = 0.004 #サンプル間隔
 Num_trajectory = 1 #サンプル数軌道の数
 PE_power = 20 #Setting1~4までは20でやっていた．5は1
 #Num_Samples_per_traj = Num_Samples_per_traj = 2 * N_inner_obj * N_sample * N_GD #200000 #1つの軌道につきサンプル数個数
 Num_Samples_per_traj = (2 * N_inner_obj * N_sample * N_GD * tau) / Ts
 Num_Samples_per_traj = Int(trunc(Num_Samples_per_traj))
+Num_Samples_per_traj = 1000000
 println("Num_Samples_per_traj: ", Num_Samples_per_traj)
 noise_free = false
 
 Steps_per_sample = Ts / system.h
 Steps_per_sample = round(Steps_per_sample)
 println("Steps_per_sample: ", Steps_per_sample)
+
 Num_TotalSamples = Num_trajectory * Num_Samples_per_traj
 T_Sysid = Ts * Num_Samples_per_traj
-Ts = 0.01
-Num_Samples_per_traj = 2 * N_inner_obj * N_sample * N_GD #200000
-println("Num_Samples_per_traj: ", Num_Samples_per_traj)
+println("Identification horizon: ", T_Sysid)
+
 Sysid_method = "N4sid"
-est_system = Est_discrete_system(system, Num_TotalSamples, Num_trajectory, Steps_per_sample, Ts, T_Sysid, PE_power)
+accuracy = "Float32"
+est_system = Est_discrete_system(system,
+    Num_TotalSamples,
+    Num_trajectory,
+    Steps_per_sample,
+    Ts,
+    T_Sysid,
+    PE_power,
+    accuracy=accuracy)
 Q_prime_sysid = [est_system.C'*Q1*est_system.C zeros(est_system.n, est_system.p); zeros(est_system.p, est_system.n) Q2]
 prob_sysid = Problem_param(Q1, Q2, Q_prime_sysid, last_value)
 
 # 離散化システムを導入する
-Kp_list_SysId, Ki_list_SysId, _ = ProjGrad_Discrete_Conststep_ModelBased_Noise(K_P, K_I, est_system, prob_sysid, Opt)
+eta_discrete = 0.0001
+epsilon_GD_discrete = 1e-5
+N_GD_discrete = 20000
+
+Opt_discrete = Optimization_param(
+    eta_discrete,
+    epsilon_GD_discrete,
+    epsilon_EstGrad,
+    delta, #理論保証から導かれたパラメータを使用する時に使う
+    eps_interval,
+    M_interval,
+    N_sample,
+    N_inner_obj,
+    N_GD_discrete,
+    tau,
+    r,
+    projection,
+    method_name
+)
+Kp_list_SysId, Ki_list_SysId, _ = ProjGrad_Discrete_Conststep_ModelBased_Noise(K_P, K_I, est_system, prob_sysid, Opt_discrete)
+tau_eval = 100
+Iteration_obj_eval = 40
+Obj_MFree_uhat = obj_mean_continuous(system, prob, K_P_Mfree, K_I_Mfree,
+    system.u_star, tau_eval, Iteration_obj_eval)
+println("model free 目的関数: ", Obj_MFree_uhat)
+Obj_SysId = obj_mean_zoh(system, prob,
+    Kp_list_SysId[end], Ki_list_SysId[end],
+    system.u_star, Ts, tau_eval, Iteration_obj_eval)
+println("model base 目的関数: ", Obj_SysId)
 
 
 
@@ -246,4 +283,3 @@ plot!(plotting, Obj_list_MFree_uhat, labels="Model-Free_uhat", lc=:green)
 xlabel!("Iteration")
 ylabel!(L"f(K)")
 savefig(plotting, dir * "/ObjVal_ndim=$(n_dim)_Ts=$(Ts)_IdSample=$(Num_Samples_per_traj)_Nsample=$(N_sample)_Ninner=$(N_inner_obj).png")
-=#

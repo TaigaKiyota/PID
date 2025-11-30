@@ -15,7 +15,7 @@ using JSON
 using Dates
 
 Setting_num = 6
-simulation_name = "Vanila_parameter2_zoh"
+simulation_name = "Vanila_parameter3_zoh"
 estimated_param = false
 
 
@@ -54,8 +54,8 @@ M_interval = 3
 
 norm_omega = sqrt(2 * system.p) * M_interval
 
-N_sample = 10 # 50
-N_GD = 30 # 200
+N_sample = 15 # 50
+N_GD = 40 # 200
 N_inner_obj = 20 #20
 tau = 15
 r = 0.09
@@ -160,6 +160,7 @@ Steps_per_sample = round(Steps_per_sample)
 println("Steps_per_sample: ", Steps_per_sample)
 Num_TotalSamples = Num_trajectory * Num_Samples_per_traj
 T_Sysid = Ts * Num_Samples_per_traj
+println("Identification horizon: ", T_Sysid)
 
 ## ディレクトリ作成
 dir = "System_setting/Noise_dynamics/Settings/Setting$Setting_num/VS_ModelBase"
@@ -330,11 +331,11 @@ list_obj_MFree = []
 list_obj_SysId = []
 for trial in 1:Trials
     Obj_MFree_uhat = obj_mean_continuous(system, prob, (list_Kp_seq_ModelFree[trial])[end], (list_Ki_seq_ModelFree[trial])[end],
-        system.u_star, tau_eval, Iteration_obj_eval)
+        system.u_star, tau_eval, Iteration_obj_eval, h=1e-5)
 
-    Obj_SysId = obj_mean_continuous(system, prob,
-        (list_Kp_seq_ModelFree[trial])[end], (list_Ki_seq_ModelFree[trial])[end],
-        system.u_star, tau_eval, Iteration_obj_eval)
+    Obj_SysId = obj_mean_zoh(system, prob,
+        (list_Kp_seq_Sysid[trial])[end], (list_Ki_seq_Sysid[trial])[end],
+        system.u_star, Ts, tau_eval, Iteration_obj_eval, h=1e-5)
     push!(list_obj_MFree, Obj_MFree_uhat)
     push!(list_obj_SysId, Obj_SysId)
 end

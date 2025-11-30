@@ -283,11 +283,11 @@ function obj_trunc_from_traj(system, prob, y_s, z_s, tau)
 end
 
 # ZOHの軌道での目的関数のシミュレーション平均
-function obj_mean_zoh(system, prob, K_P, K_I, u_hat, Ts, tau, Iteration_obj)
+function obj_mean_zoh(system, prob, K_P, K_I, u_hat, Ts, tau, Iteration_obj; h=0)
     mean_obj = 0
     for iter in 1:Iteration_obj
         x_0 = rand(system.rng, system.Dist_x0, system.n)
-        u_s, y_s, z_s = Orbit_zoh_PI(system, K_P, K_I, u_hat, x_0, tau, Ts=Ts)
+        u_s, y_s, z_s = Orbit_zoh_PI(system, K_P, K_I, u_hat, x_0, tau, Ts=Ts, h=h)
         u_s = nothing
         GC.gc()
         mean_obj = mean_obj + obj_trunc_from_traj(system, prob, y_s, z_s, tau)
@@ -299,11 +299,11 @@ function obj_mean_zoh(system, prob, K_P, K_I, u_hat, Ts, tau, Iteration_obj)
 end
 
 # 連続時間制御器での目的関数のシミュレーション平均
-function obj_mean_continuous(system, prob, K_P, K_I, u_hat, tau, Iteration_obj)
+function obj_mean_continuous(system, prob, K_P, K_I, u_hat, tau, Iteration_obj; h=0)
     mean_obj = 0
     for iter in 1:Iteration_obj
         x_0 = rand(system.rng, system.Dist_x0, system.n)
-        u_s, y_s, z_s = Orbit_continuous_PI(system, K_P, K_I, u_hat, x_0, tau)
+        u_s, y_s, z_s = Orbit_continuous_PI(system, K_P, K_I, u_hat, x_0, tau, h=h)
         u_s = nothing
         GC.gc()
         mean_obj = mean_obj + obj_trunc_from_traj(system, prob, y_s, z_s, tau)

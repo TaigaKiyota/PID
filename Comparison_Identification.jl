@@ -1,0 +1,52 @@
+using Random, Distributions
+using ControlSystemIdentification, ControlSystemsBase
+using LinearAlgebra
+using Plots
+using LaTeXStrings
+using ControlSystems
+using StatsPlots
+
+include("function_noise.jl")
+include("function_orbit.jl")
+include("function_AlgoParam.jl")
+include("function_SomeSetting.jl")
+using JLD2
+using JSON
+using Dates
+
+Setting_num = 6
+simulation_name = "Vanila_parameter2_zoh"
+estimated_param = false
+
+
+@load "System_setting/Noise_dynamics/Settings/Setting$Setting_num/Settings.jld2" Setting
+
+dir = "System_setting/Noise_dynamics/Settings/Setting$Setting_num/VS_ModelBase"
+
+dir = dir * "/" * simulation_name
+
+params = JSON.parsefile(dir * "/params.json")
+Ts = params["Ts"]
+Num_Samples_per_traj = params["Num_Samples_per_traj"]
+accuracy = accuracy["accuracy"]
+T_Sysid = Ts * Num_Samples_per_traj
+Num_trajectory = 1
+Num_TotalSamples = Num_trajectory * Num_Samples_per_traj
+PE_power = params["PE_power"]
+
+est_system = Est_discrete_system(system, Num_TotalSamples, Num_trajectory, Steps_per_sample, Ts, T_Sysid, PE_power)
+
+Trials = 20
+list_est_system = []
+for trial in 1:Trials
+    est_system = Est_discrete_system(system,
+        Num_TotalSamples,
+        Num_trajectory,
+        Steps_per_sample,
+        Ts,
+        T_Sysid,
+        PE_power)
+    push!(list_est_system, est_system)
+end
+
+@save dir * "/list_est_system.jld2" list_est_system
