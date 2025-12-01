@@ -176,7 +176,7 @@ end
 
 
 # 結果の参照のためのパラメータ
-tau_eval = 100
+tau_eval = 400
 Iteration_obj_eval = 200
 
 ## パラメータの保存
@@ -208,6 +208,10 @@ params = Dict(
     "accuracy" => accuracy,
     "tau_eval" => tau_eval,
     "iteration_obj_eval" => Iteration_obj_eval,
+    "K_P" => K_P,
+    "K_I" => K_I,
+    "K_P_disc" => K_P_disc,
+    "K_I_disc" => K_I_disc,
     "date" => Dates.now(),
 )
 
@@ -333,11 +337,11 @@ list_obj_MFree = []
 list_obj_SysId = []
 for trial in 1:Trials
     Obj_MFree_uhat = obj_mean_continuous(system, prob, (list_Kp_seq_ModelFree[trial])[end], (list_Ki_seq_ModelFree[trial])[end],
-        system.u_star, tau_eval, Iteration_obj_eval, h=1e-5)
+        system.u_star, tau_eval, Iteration_obj_eval, h=5e-4)
 
     Obj_SysId = obj_mean_zoh(system, prob,
         (list_Kp_seq_Sysid[trial])[end], (list_Ki_seq_Sysid[trial])[end],
-        system.u_star, Ts, tau_eval, Iteration_obj_eval, h=1e-5)
+        system.u_star, Ts, tau_eval, Iteration_obj_eval, h=5e-4)
     push!(list_obj_MFree, Obj_MFree_uhat)
     push!(list_obj_SysId, Obj_SysId)
 end
