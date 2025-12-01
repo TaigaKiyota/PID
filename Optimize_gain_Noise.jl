@@ -61,12 +61,12 @@ println("continuous objective: ", continuous_zoh)
 =#
 
 # アルゴリズムのパラメータ
-eta = 0.002 # 0.05だといい結果が出そう
+eta = 0.0015 # 0.05だといい結果が出そう
 epsilon_GD = 0.0001
 epsilon_EstGrad = 0.0001
 eps_interval = 0
 M_interval = 10
-N_sample = 25
+N_sample = 20
 N_inner_obj = 25 #20
 N_GD = 200
 tau = 15
