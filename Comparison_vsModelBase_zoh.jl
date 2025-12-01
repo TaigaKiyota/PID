@@ -15,7 +15,7 @@ using JSON
 using Dates
 
 Setting_num = 6
-simulation_name = "Vanila_parameter3_zoh"
+simulation_name = "Vanila_parameter4_zoh"
 estimated_param = false
 
 
@@ -30,6 +30,8 @@ Trials = 20
 ## 初期点のゲイン
 K_P = 1.0I(system.p)
 K_I = 1.0I(system.p)
+K_P_disc = 0.0 * I(system.p)
+K_I_disc = 0.0 * I(system.p)
 
 ## 最適化問題のパラメータ
 Q1 = 200.0I(system.p)
@@ -46,17 +48,17 @@ end
 prob = Problem_param(Q1, Q2, Q_prime, last_value)
 
 ## アルゴリズムのパラメータ
-eta = 0.005 # 0.05だといい結果が出そう
+eta = 0.002 # 0.05だといい結果が出そう
 epsilon_GD = 1e-16
 delta = 0.05 # 確率のパラメータ
-eps_interval = 0.3
-M_interval = 3
+eps_interval = 0
+M_interval = 10
 
 norm_omega = sqrt(2 * system.p) * M_interval
 
-N_sample = 15 # 50
-N_GD = 40 # 200
-N_inner_obj = 20 #20
+N_sample = 25 # 50
+N_GD = 35 # 200
+N_inner_obj = 25 #20
 tau = 15
 r = 0.09
 
@@ -100,7 +102,7 @@ method_num = 3
 method_names_list = ["Onepoint_SimpleBaseline", "One_point_WithoutBase", "TwoPoint"]
 method_name = method_names_list[method_num]
 
-projection_num = 2
+projection_num = 3
 projection_list = ["diag", "Eigvals", "Frobenius"]
 projection = projection_list[projection_num]
 ## 最適化のパラメータ設定
@@ -239,8 +241,8 @@ for trial in 1:Trials
     # システム同定によるゲイン最適化
     Q_prime_sysid = [est_system.C'*Q1*est_system.C zeros(est_system.n, est_system.p); zeros(est_system.p, est_system.n) Q2]
     prob_sysid = Problem_param(Q1, Q2, Q_prime_sysid, last_value)
-    Kp_seq_SysId, Ki_seq_SysId, _ = ProjGrad_Discrete_Conststep_ModelBased_Noise(K_P,
-        K_I,
+    Kp_seq_SysId, Ki_seq_SysId, _ = ProjGrad_Discrete_Conststep_ModelBased_Noise(K_P_disc,
+        K_I_disc,
         est_system,
         prob_sysid,
         Opt_discrete)

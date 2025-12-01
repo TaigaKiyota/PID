@@ -9,6 +9,7 @@ using Statistics
 
 include("function_noise.jl")
 include("function_orbit.jl")
+include("function_SomeSetting.jl")
 using JLD2
 using JSON
 using Dates
@@ -68,8 +69,8 @@ end
 
 x_0 = zeros(system.n)
 z_0 = zeros(system.p)
-T = 2
-h = 1e-4
+T = 1.8
+h = 5e-4
 K_P_Mfree = (list_Kp_seq_ModelFree[trial])[end]
 K_I_Mfree = (list_Ki_seq_ModelFree[trial])[end]
 println("ModelFree Kp: ", K_P_Mfree)
@@ -83,9 +84,21 @@ println("SysId Ki: ", K_I_SysId)
 u_star_Sysid = list_ustar_Sysid[trial]
 u_hat = list_uhat[trial]
 
+disc_system = ZOH_discrete_system(system, Ts)
+println("abs closed loop eigvals of discrete:",
+    abs.(eigvals(disc_system.F - disc_system.G * [0.01 * I(system.p) 0.01 * I(system.p)] * disc_system.H))
+)
+println("abs open loop eigvals of discrete:",
+    abs.(eigvals(disc_system.A))
+)
+
+_, y_s_sysid, _ = Orbit_zoh_PI(system, 0.01 * I(system.p), 0.01 * I(system.p), u_star_Sysid, x_0, T, Ts=Ts, h=h)
+println(y_s_sysid[1, end-50:end])
 _, y_s_hat, _ = Orbit_continuous_PI(system, K_P_Mfree, K_I_Mfree, u_hat, x_0, T, h=h)
-_, y_s_sysid, _ = Orbit_zoh_PI(system, K_P_SysId, K_I_SysId, u_star_Sysid, x_0, T, Ts=Ts, h=h)
-Timeline = 0:system.h:T
+println(y_s_hat[1, end-50:end])
+Timeline = 0:h:T
+println(size(y_s_sysid))
+println(size(y_s_hat))
 
 plotting = plot(legendfontsize=18, tickfontsize=15, guidefont=18)
 plot!(plotting, Timeline[1:end], y_s_hat[1, 1:end], labels="Proposed Method", lw=1.8, lc=:red)

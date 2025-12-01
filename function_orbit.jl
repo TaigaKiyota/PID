@@ -690,12 +690,12 @@ end
 
 function Orbit_Identification_noise_succinct(system, x_0, T; Ts=10, PE_power=20, N=0)
     if N == 0
-        N = Int(trunc(T / system.h))
+        N = Int(round(T / system.h))
     end
 
-    length = Int(trunc(T / Ts))
+    length = Int(round(T / Ts))
 
-    N_persample = Int(trunc(Ts / system.h))
+    N_persample = Int(round(Ts / system.h))
 
     x = x_0
     u_s = zeros(system.m, length + 1)
@@ -746,12 +746,12 @@ end
 
 function Orbit_Identification_noise_Float32(system, x_0, T; Ts=10, PE_power=20, N=0)
     if N == 0
-        N = Int(trunc(T / system.h))
+        N = Int(round(T / system.h))
     end
 
-    length = Int(trunc(T / Ts))
+    length = Int(round(T / Ts))
 
-    N_persample = Int(trunc(Ts / system.h))
+    N_persample = Int(round(Ts / system.h))
 
     # --- Float32 に統一 ---
     #x = Float32.(x_0)
@@ -841,12 +841,12 @@ end
 
 function NotInPlace_Orbit_Identification_noise_succinct(system, x_0, T; Ts=10, PE_power=20, N=0)
     if N == 0
-        N = Int(trunc(T / system.h))
+        N = Int(round(T / system.h))
     end
 
-    length = Int(trunc(T / Ts))
+    length = Int(round(T / Ts))
 
-    N_persample = Int(trunc(Ts / system.h))
+    N_persample = Int(round(Ts / system.h))
 
     #x_s = zeros(system.n, length + 1)
     #x_s[:, 1] .= x_0
@@ -869,20 +869,18 @@ function NotInPlace_Orbit_Identification_noise_succinct(system, x_0, T; Ts=10, P
     return u_s, y_s
 end
 
-
-
-function Orbit_zoh_PI(system, K_P, K_I, u_hat, x_0, T; Ts=10, N=0, h=0)
+function NotInPlace_Orbit_zoh_PI(system, K_P, K_I, u_hat, x_0, T; Ts=10, N=0, h=0)
     if h == 0
         h = system.h
     end
 
     if N == 0
-        N = Int(trunc(T / system.h))
+        N = Int(round(T / h))
     end
 
-    length = Int(trunc(T / Ts))
+    length = Int(round(T / Ts))
 
-    N_persample = Int(trunc(Ts / system.h))
+    N_persample = Int(round(Ts / h))
 
     #x_s = zeros(system.n, length + 1)
     #x_s[:, 1] .= x_0
@@ -912,11 +910,79 @@ function Orbit_zoh_PI(system, K_P, K_I, u_hat, x_0, T; Ts=10, N=0, h=0)
     return u_s, y_s, z_s
 end
 
-function Orbit_continuous_PI(system, K_P, K_I, u_hat, x_0, T; h=0)
+function Orbit_zoh_PI(system, K_P, K_I, u_hat, x_0, T; Ts=10, N=0, h=0)
     if h == 0
         h = system.h
     end
-    N = Int(trunc(T / system.h))
+
+    if N == 0
+        N = Int(trunc(T / h))
+    end
+
+    length = Int(trunc(T / Ts))
+
+    N_persample = Int(trunc(Ts / h))
+
+    #x_s = zeros(system.n, length + 1)
+    #x_s[:, 1] .= x_0
+    x = x_0
+    u_s = zeros(system.m, N + 1)
+    y_s = zeros(system.p, N + 1)
+    z_s = zeros(system.p, N + 1)
+    y = system.C * x_0
+    y_s[:, 1] .= y
+    z = zeros(system.p)
+
+    # 状態と作業用バッファを一度だけ確保
+    x = copy(x_0)
+    u_buf = zeros(eltype(x_0), system.m)
+    w_buf = zeros(eltype(x_0), system.n)  # プロセスノイズ用
+    v_buf = zeros(eltype(x_0), system.p)  # 観測ノイズ用
+    Ax_buf = similar(x_0)
+    Bu_buf = similar(x_0)
+    Wx_buf = similar(x_0)
+
+    sqrt_h = sqrt(h)
+
+    @views for i in 1:length
+        #@. u_buf = K_P * (system.y_star - copy(y)) + K_I * z + u_hat
+        u_buf .= K_P * (system.y_star - y) + K_I * z + u_hat
+
+        # N_persample ステップ時間発展（Euler–Maruyama）
+        for k in 1:N_persample
+            # Ax_buf = A*x, Bu_buf = B*u_buf
+            mul!(Ax_buf, system.A, x)
+            mul!(Bu_buf, system.B, u_buf)
+
+            # Wx_buf = W_half * w_buf
+            randn!(system.rng, w_buf)
+            mul!(Wx_buf, system.W_half, w_buf)
+
+            @. x += h * (Ax_buf + Bu_buf) + sqrt_h * Wx_buf
+
+            randn!(system.rng, v_buf)
+            # y_col = system.C * x + V_half * v_buf を in-place で
+            y_col = view(y_s, :, (i - 1) * N_persample + k + 1)
+            mul!(y_col, system.C, x)              # y_col = C*x
+            mul!(v_buf, system.V_half, v_buf)     # v_buf = V_half * v_buf
+            @. y_col += v_buf
+
+            y .= y_col
+
+            @views u_s[:, (i-1)*N_persample+k+1] .= u_buf
+            @views z_s[:, (i-1)*N_persample+k+1] .= z
+        end
+        z = z + (system.y_star - copy(y))
+    end
+    return u_s, y_s, z_s
+end
+
+
+function Orbit_continuous_PI_noinplace(system, K_P, K_I, u_hat, x_0, T; h=0)
+    if h == 0
+        h = system.h
+    end
+    N = Int(round(T / h))
 
     #x_s = zeros(system.n, length + 1)
     #x_s[:, 1] .= x_0
@@ -941,6 +1007,89 @@ function Orbit_continuous_PI(system, K_P, K_I, u_hat, x_0, T; h=0)
         # Update Integrator
     end
     return u_s, y_s, z_s
+
+end
+
+function Orbit_continuous_PI(system, K_P, K_I, u_hat, x_0, T; h=0)
+
+
+    if h == 0
+        h = system.h
+    end
+    N = Int(round(T / h))
+
+
+    n, m, p = system.n, system.m, system.p
+    A, B, C = system.A, system.B, system.C
+    W_half, V_half = system.W_half, system.V_half
+    y_star = system.y_star
+    rng = system.rng
+
+    elty = eltype(x_0)
+
+    # --- 出力配列 ---
+    u_s = zeros(elty, m, N + 1)
+    y_s = zeros(elty, p, N + 1)
+    z_s = zeros(elty, p, N + 1)
+
+    # --- 状態と内部変数 ---
+    x = copy(x_0)                  # x_0 をそのまま共有しないように
+    z = zeros(elty, p)
+
+    y = similar(y_star)
+    mul!(y, C, x)                  # y = C * x
+    @views y_s[:, 1] .= y
+    @views z_s[:, 1] .= z
+
+    # --- 作業用バッファ ---
+    e = similar(y_star)       # e = y_star - y
+    u_buf = similar(u_hat)        # u_input 用
+    Ax_buf = similar(x_0)          # A*x
+    Bu_buf = similar(x_0)          # B*u
+    w_buf = zeros(elty, n)        # プロセスノイズ
+    Wx_buf = similar(x_0)          # W_half * w
+    v_buf = zeros(elty, p)        # 観測ノイズ
+    Vv_buf = zeros(elty, p)        # V_half * v
+
+    sqrt_h = sqrt(h)
+
+    @inbounds @views for k in 1:N
+        # --- 誤差 e = y_star - y ---
+        @. e = y_star - y
+
+        # --- u = K_P * e + K_I * z + u_hat ---
+        mul!(u_buf, K_P, e)        # u_buf = K_P * e
+        mul!(Vv_buf, K_I, z)       # Vv_buf を一時バッファとして K_I*z に再利用
+        @. u_buf = u_buf + Vv_buf + u_hat
+
+        # --- x_{k+1} = x_k + h(Ax + Bu) + sqrt(h)W_half * w ---
+        mul!(Ax_buf, A, x)         # Ax_buf = A * x
+        mul!(Bu_buf, B, u_buf)     # Bu_buf = B * u
+
+        randn!(rng, w_buf)         # w_buf ~ N(0, I)
+        mul!(Wx_buf, W_half, w_buf)
+
+        @. x = x + h * (Ax_buf + Bu_buf) + sqrt_h * Wx_buf
+
+        # --- y_{k+1} = Cx + V_half * v ---
+        randn!(rng, v_buf)
+        mul!(Vv_buf, V_half, v_buf)
+
+        mul!(y, C, x)              # y = C * x
+        @. y = y + Vv_buf          # y += ノイズ
+
+        # --- z_{k+1} = z_k + h (y_star - y) ---
+        @. e = y_star - y
+        @. z = z + h * e
+
+        # --- 記録 ---
+        u_s[:, k+1] .= u_buf
+        y_s[:, k+1] .= y
+        z_s[:, k+1] .= z
+    end
+
+    return u_s, y_s, z_s
+
 end
 
 function Orbit_Identification_noiseFree(system, x_0, T)

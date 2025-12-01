@@ -23,8 +23,8 @@ end
 system = Setting["system"]
 
 # 初期点のゲイン
-K_P = 2.0 * I(system.p)
-K_I = 2.0 * I(system.p)
+K_P = 1.0 * I(system.p)
+K_I = 1.0 * I(system.p)
 
 ## 最適化問題のパラメータ
 Q1 = 200.0I(system.p)
@@ -61,14 +61,14 @@ println("continuous objective: ", continuous_zoh)
 =#
 
 # アルゴリズムのパラメータ
-eta = 0.005 # 0.05だといい結果が出そう
+eta = 0.002 # 0.05だといい結果が出そう
 epsilon_GD = 0.0001
 epsilon_EstGrad = 0.0001
-eps_interval = 0.3
-M_interval = 3
-N_sample = 15
-N_inner_obj = 20 #20
-N_GD = 40
+eps_interval = 0
+M_interval = 10
+N_sample = 25
+N_inner_obj = 25 #20
+N_GD = 200
 tau = 15
 r = 0.09
 delta = 0.01
@@ -77,7 +77,7 @@ method_num = 3
 method_names_list = ["Onepoint_SimpleBaseline", "One_point_WithoutBase", "TwoPoint"]
 method_name = method_names_list[method_num]
 
-projection_num = 2
+projection_num = 3
 projection_list = ["diag", "Eigvals", "Frobenius"]
 projection = projection_list[projection_num]
 
@@ -192,7 +192,7 @@ end
 
 # システム同定+モデルベースアルゴリズム
 ## システム同定パラメータ
-Ts = 0.004 #サンプル間隔
+Ts = 0.01 #サンプル間隔
 Num_trajectory = 1 #サンプル数軌道の数
 PE_power = 20 #Setting1~4までは20でやっていた．5は1
 #Num_Samples_per_traj = Num_Samples_per_traj = 2 * N_inner_obj * N_sample * N_GD #200000 #1つの軌道につきサンプル数個数
