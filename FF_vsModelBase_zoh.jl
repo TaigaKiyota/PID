@@ -15,7 +15,7 @@ using JSON
 using Dates
 
 Setting_num = 6
-simulation_name = "FF_Test_parameter_zoh"
+simulation_name = "FF_Vanila_parameter5_zoh"
 estimated_param = false
 
 
@@ -26,7 +26,7 @@ system = Setting["system"]
 
 n_dim = true # システム同定の際に状態空間の次元を情報として与えるか
 
-Trials = 5
+Trials = 20
 
 # FF推定のためのパラメータ
 K_P_uhat = 0.001 * I(system.p)
@@ -43,7 +43,7 @@ println("Estimated tau_u: ", tau_u)
 
 
 ## システム同定パラメータ
-Ts = 0.01 #サンプル間隔
+Ts = 0.005 #サンプル間隔
 Num_trajectory = 1 #サンプル数軌道の数
 PE_power = 20 #Setting1~4までは20でやっていた．5は1
 Num_Samples_per_traj = (system.m + 1) * tau_u / Ts
@@ -77,6 +77,7 @@ params = Dict(
     "Num_trajectory" => Num_trajectory, #サンプル数軌道の数
     "Num_Samples_per_traj" => Num_Samples_per_traj,
     "PE_power" => PE_power,
+    "Trials" => Trials,
     "date" => Dates.now(),
 )
 

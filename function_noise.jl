@@ -260,6 +260,54 @@ end
 #軌道を受け取って，有限打ち切り目的関数を計算
 function obj_trunc_from_traj(system, prob, y_s, z_s, tau)
     Nstep = Int(tau / system.h)
+    Q1 = prob.Q1
+    Q2 = prob.Q2
+    y_star = system.y_star
+
+    # 作業用バッファ（1回だけアロケーション）
+    e = similar(y_star)  # e = y_star - y
+    Q1e = similar(y_star)  # Q1 * e
+    Q2z = similar(y_star)  # Q2 * z
+    acc = 0
+
+    @inbounds begin
+        # --- j = 1 (重み 1) ---
+        @views @. e = y_star - y_s[:, 1]
+        @views z = z_s[:, 1]
+
+        mul!(Q1e, Q1, e)   # Q1e = Q1 * e
+        mul!(Q2z, Q2, z)   # Q2z = Q2 * z
+        acc += dot(e, Q1e) + dot(z, Q2z)
+
+        # --- 中点 (j = 2 .. Nstep-1, 重み 4/2) ---
+        @simd for j in 2:(Nstep-1)
+            @views begin
+                @. e = y_star - y_s[:, j]
+                z = z_s[:, j]
+            end
+
+            mul!(Q1e, Q1, e)
+            mul!(Q2z, Q2, z)
+
+            w = isodd(j) ? 4 : 2
+            acc += w * (dot(e, Q1e) + dot(z, Q2z))
+        end
+
+        # --- j = Nstep (重み 1) ---
+        @views @. e = y_star - y_s[:, Nstep]
+        @views z = z_s[:, Nstep]
+
+        mul!(Q1e, Q1, e)
+        mul!(Q2z, Q2, z)
+        acc += dot(e, Q1e) + dot(z, Q2z)
+    end
+
+    acc *= system.h
+    acc /= tau
+    return acc
+
+    #=
+    Nstep = Int(tau / system.h)
     e_s = y_s .- system.y_star
     e_s = -e_s
     Obj_param_mat = [prob.Q1 zeros(system.p, system.p); zeros(system.p, system.p) prob.Q2]
@@ -267,7 +315,7 @@ function obj_trunc_from_traj(system, prob, y_s, z_s, tau)
     vec = [e_s[:, 1]; z_s[:, 1]]
     obj = (vec' * Obj_param_mat * vec) / 3
     @simd for j in 2:(Nstep-1)
-        vec = [e_s[:, Int(j)]; z_s[:, Int(j)]]
+        vec = [e_s[:, j]; z_s[:, j]]
         if j % 2 == 1
             obj += 4 * (vec' * Obj_param_mat * vec) / 3
         else
@@ -280,6 +328,7 @@ function obj_trunc_from_traj(system, prob, y_s, z_s, tau)
     obj *= system.h
     obj /= tau
     return obj
+    =#
 end
 
 # ZOHの軌道での目的関数のシミュレーション平均

@@ -14,7 +14,7 @@ using JSON
 using Dates
 
 Setting_num = 6
-simulation_name = "Vanila_parameter2"
+simulation_name = "Vanila_parameter3_zoh"
 
 @load "System_setting/Noise_dynamics/Settings/Setting$Setting_num/Settings.jld2" Setting
 
@@ -68,8 +68,8 @@ end
 
 x_0 = zeros(system.n)
 z_0 = zeros(system.p)
-T = 5
-h = 1e-5
+T = 2
+h = 1e-4
 K_P_Mfree = (list_Kp_seq_ModelFree[trial])[end]
 K_I_Mfree = (list_Ki_seq_ModelFree[trial])[end]
 println("ModelFree Kp: ", K_P_Mfree)
@@ -86,7 +86,7 @@ u_hat = list_uhat[trial]
 _, y_s_hat, _ = Orbit_continuous_PI(system, K_P_Mfree, K_I_Mfree, u_hat, x_0, T, h=h)
 _, y_s_sysid, _ = Orbit_zoh_PI(system, K_P_SysId, K_I_SysId, u_star_Sysid, x_0, T, Ts=Ts, h=h)
 Timeline = 0:system.h:T
-_
+
 plotting = plot(legendfontsize=18, tickfontsize=15, guidefont=18)
 plot!(plotting, Timeline[1:end], y_s_hat[1, 1:end], labels="Proposed Method", lw=1.8, lc=:red)
 plot!(plotting, Timeline[1:end], y_s_sysid[1, 1:end], labels="Indirect Approach", lw=1.8, lc=:blue)
@@ -112,71 +112,43 @@ end
 
 
 ## ゲイン最適化の結果表示
-
-list_seq_obj_MFree_uhat = []
-list_seq_obj_SysId = []
-for trial in 1:Trials
-    Obj_seq_MFree_uhat = []
-    Obj_seq_SysId = []
-    for i in 1:N_GD
-        if i <= (size(list_Kp_seq_ModelFree[trial], 1))
-            Obj_MFree_uhat = ObjectiveFunction_noise(system, prob, (list_Kp_seq_ModelFree[trial])[i], (list_Ki_seq_ModelFree[trial])[i])
-        else
-            Obj_MFree_uhat = ObjectiveFunction_noise(system, prob, (list_Kp_seq_ModelFree[trial])[end], (list_Ki_seq_ModelFree[trial])[end])
-        end
-
-        if i <= (size(list_Kp_seq_Sysid[trial], 1))
-            Obj_SysId = ObjectiveFunction_noise(system, prob, (list_Kp_seq_Sysid[trial])[i], (list_Ki_seq_Sysid[trial])[i])
-        else
-            Obj_SysId = ObjectiveFunction_noise(system, prob, (list_Kp_seq_Sysid[trial])[end], (list_Ki_seq_Sysid[trial])[end])
-        end
-        push!(Obj_seq_MFree_uhat, Obj_MFree_uhat)
-        push!(Obj_seq_SysId, Obj_SysId)
-    end
-    push!(list_seq_obj_MFree_uhat, Obj_seq_MFree_uhat)
-    push!(list_seq_obj_SysId, Obj_seq_SysId)
-end
-
-Concat_Mfree_hat = reduce(hcat, [c for c in list_seq_obj_MFree_uhat])
-Mean_Mfree_hat = mean(Concat_Mfree_hat; dims=2)[:]
-std_Mfree_hat = std(Concat_Mfree_hat; dims=2)[:]
-
-Concat_MBase_Sysid = reduce(hcat, [c for c in list_seq_obj_SysId])
-Mean_MBase_Sysid = mean(Concat_MBase_Sysid; dims=2)[:]
-std_MBase_Sysid = std(Concat_MBase_Sysid; dims=2)[:]
-
-plotting = plot(legendfontsize=18, tickfontsize=15, guidefont=18)
-# プロット（平均 ± 1σのリボン）
-plot!(plotting, 1:N_GD, Mean_Mfree_hat, ribbon=std_Mfree_hat, label="Model Free")
-plot!(plotting, 1:N_GD, Mean_MBase_Sysid, ribbon=std_MBase_Sysid, label="Model Base +SysId")
-savefig(plotting, dir * "/Gain_ConvergenceCurve.png")
-
-
-
-#=
-# 結果の参照のためのパラメータ
-tau_eval = 2000
+tau_eval = 500
 Iteration_obj_eval = 200
-
 list_obj_MFree = []
 list_obj_SysId = []
 for trial in 1:Trials
     Obj_MFree_uhat = obj_mean_continuous(system, prob, (list_Kp_seq_ModelFree[trial])[end], (list_Ki_seq_ModelFree[trial])[end],
-        system.u_star, tau_eval, Iteration_obj_eval)
+        system.u_star, tau_eval, Iteration_obj_eval, h=h)
 
-    Obj_SysId = obj_mean_continuous(system, prob,
+    Obj_SysId = obj_mean_zoh(system, prob,
         (list_Kp_seq_Sysid[trial])[end], (list_Ki_seq_Sysid[trial])[end],
-        system.u_star, tau_eval, Iteration_obj_eval)
+        system.u_star, Ts, tau_eval, Iteration_obj_eval, h=h)
     push!(list_obj_MFree, Obj_MFree_uhat)
     push!(list_obj_SysId, Obj_SysId)
+    println("trial $trial has done!")
 end
 
-boxplot(list_obj_MFree, label="Model Free")
-boxplot!(list_obj_SysId, label="System Identification")
-savefig(dir * "/Gain_MeanObj_boxplot.png")
+dir_path = dir * "/Gain_meanObj"
+if !isdir(dir_path)
+    mkdir(dir_path)  # フォルダを作成
+end
 
-@save dir * "/list_obj_MFree.jld2" list_obj_MFree
-@save dir * "/list_obj_SysId.jld2" list_obj_SysId
-=#
+boxplot(list_obj_MFree,
+    tickfontsize=18, yguidefont=font(20), fillcolor=:red, legend=false, outliercolor=:red, markercolor=:red)
+boxplot!(list_obj_SysId, fillcolor=:blue, outliercolor=:blue, markercolor=:blue)
+xticks!((1:2, ["Proposed method", "Indirect approach"]))
+#yticks!([1e-2, 1e-1, 1, 10, 20], ["0.01", "0.1", "1", "10", "20"]),
+#ylims!(1e-2, 20)
+#ylabel!(L"\|\| u_0 - u^{\star} \|\|")
+savefig(dir_path * "/Gain_MeanObj_boxplot.png")
 
+boxplot(list_obj_MFree, tickfontsize=15, bar_width=0.3, yguidefont=font(18), label="Proposed method")
+xticks!((1:1, ["Proposed method"]))
+#ylabel!(L"\|\| u_0 - u^{\star} \|\|")
+savefig(dir_path * "/Gain_MeanObj_boxplot_MFree.png")
+
+boxplot(list_obj_SysId, tickfontsize=15, bar_width=0.3, yguidefont=font(18), label="Indirect approach")
+#ylabel!(L"\|\| u_0 - u^{\star} \|\|")
+xticks!((1:1, ["Indirect approach"]))
+savefig(dir_path * "/Gain_MeanObj_boxplot_SysId.png")
 
