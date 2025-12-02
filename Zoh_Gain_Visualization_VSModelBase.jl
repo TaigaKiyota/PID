@@ -15,13 +15,13 @@ using JSON
 using Dates
 
 Setting_num = 6
-simulation_name = "Vanila_parameter3_zoh"
+simulation_name = "Vanila_parameter4_zoh"
 
 @load "System_setting/Noise_dynamics/Settings/Setting$Setting_num/Settings.jld2" Setting
 
 dir = "System_setting/Noise_dynamics/Settings/Setting$Setting_num/VS_ModelBase"
 dir = dir * "/" * simulation_name
-
+@load dir * "/list_est_system.jld2" list_est_system
 system = Setting["system"]
 
 params = JSON.parsefile(dir * "/params.json")
@@ -39,18 +39,25 @@ Q2 = 20.0I(system.p)  # 要変更!!!
 Q_prime = [system.C'*Q1*system.C zeros(system.n, system.p); zeros(system.p, system.n) Q2]
 prob = Problem_param(Q1, Q2, Q_prime, true, params["N_inner_obj"])
 
-@load dir * "/list_ustar_Sysid.jld2" list_ustar_Sysid
+
+#@load dir * "/list_ustar_Sysid.jld2" list_ustar_Sysid
 @load dir * "/list_uhat.jld2" list_uhat
-@load dir * "/list_Kp_seq_Sysid.jld2" list_Kp_seq_Sysid
-@load dir * "/list_Ki_seq_Sysid.jld2" list_Ki_seq_Sysid
+#@load dir * "/list_Kp_seq_Sysid.jld2" list_Kp_seq_Sysid
+#@load dir * "/list_Ki_seq_Sysid.jld2" list_Ki_seq_Sysid
 @load dir * "/list_Kp_seq_ModelFree.jld2" list_Kp_seq_ModelFree
 @load dir * "/list_Ki_seq_ModelFree.jld2" list_Ki_seq_ModelFree
+
+
+@load dir * "/list_Kp_Sysid.jld2" list_Kp_Sysid
+@load dir * "/list_Ki_Sysid.jld2" list_Ki_Sysid
 ## 相対誤差を計算する関数
 ErrorNorm(A, Aans, A0) = sqrt(sum((A - Aans) .^ 2) / sum((Aans - A0) .^ 2))
 
-Trials = size(list_ustar_Sysid, 1)
+Trials = 20
 println("Num of Trials: ", Trials)
 trial = 5
+
+est_system = list_est_system[trial]
 
 ## ゲイン最適化の結果表示
 
@@ -68,34 +75,39 @@ end
 ## シミュレーションによる軌道の確認
 
 x_0 = zeros(system.n)
+x_0 = rand(system.rng, system.Dist_x0, system.n)
 z_0 = zeros(system.p)
-T = 1.8
+T = 0.5
 h = 5e-4
 K_P_Mfree = (list_Kp_seq_ModelFree[trial])[end]
 K_I_Mfree = (list_Ki_seq_ModelFree[trial])[end]
+#K_P_Mfree = I(system.p)
+#K_I_Mfree = I(system.p)
 println("ModelFree Kp: ", K_P_Mfree)
 println("ModelFree Ki: ", K_I_Mfree)
 
-K_P_SysId = (list_Kp_seq_Sysid[trial])[end]
-K_I_SysId = (list_Ki_seq_Sysid[trial])[end]
+# システム同定後に最適化アルゴリズムを回したものを使う
+K_P_SysId = list_Kp_Sysid[trial]
+K_I_SysId = list_Ki_Sysid[trial]
 
 println("SysId Kp: ", K_P_SysId)
 println("SysId Ki: ", K_I_SysId)
-u_star_Sysid = list_ustar_Sysid[trial]
-u_hat = list_uhat[trial]
+println("Norm of SysId Kp: ", norm(K_P_SysId))
+println("Norm of SysId Ki: ", norm(K_I_SysId))
+#u_star_Sysid = list_ustar_Sysid[trial]
+#u_hat = list_uhat[trial]
 
 disc_system = ZOH_discrete_system(system, Ts)
 println("abs closed loop eigvals of discrete:",
-    abs.(eigvals(disc_system.F - disc_system.G * [0.01 * I(system.p) 0.01 * I(system.p)] * disc_system.H))
+    abs.(eigvals(disc_system.F - disc_system.G * [K_P_SysId K_I_SysId] * disc_system.H))
 )
 println("abs open loop eigvals of discrete:",
     abs.(eigvals(disc_system.A))
 )
 
-_, y_s_sysid, _ = Orbit_zoh_PI(system, 0.01 * I(system.p), 0.01 * I(system.p), u_star_Sysid, x_0, T, Ts=Ts, h=h)
-println(y_s_sysid[1, end-50:end])
-_, y_s_hat, _ = Orbit_continuous_PI(system, K_P_Mfree, K_I_Mfree, u_hat, x_0, T, h=h)
-println(y_s_hat[1, end-50:end])
+_, y_s_sysid, _ = Orbit_zoh_PI(system, K_P_SysId, K_I_SysId, est_system.u_star, x_0, T, Ts=Ts, h=h)
+
+_, y_s_hat, _ = Orbit_continuous_PI(system, K_P_Mfree, K_I_Mfree, list_uhat[trial], x_0, T, h=h)
 Timeline = 0:h:T
 println(size(y_s_sysid))
 println(size(y_s_hat))
@@ -111,12 +123,12 @@ ylabel!(L"y")
 savefig(plotting, dir_path * "/Compare_Gain_estimatedFF.png")
 
 for i in 1:system.p
-    plotting = plot(legendfontsize=15, tickfontsize=15, legend=:right, guidefont=22)
-    plot!(plotting, Timeline[1:end], y_s_hat[i, 1:end], labels="Proposed Method", lw=2, lc=:red)
-    plot!(plotting, Timeline[1:end], y_s_sysid[i, 1:end], labels="Indirect Approach", lw=2, lc=:blue)
-    hline!(plotting, system.y_star, label=L"y^{\star}", lc=:black, lw=4)
+    plotting = plot(legendfontsize=15, tickfontsize=15, legend=:best, guidefont=22)
+    plot!(plotting, Timeline[1:end], y_s_hat[i, 1:end], labels="Proposed Method", lw=3.5, lc=:red)
+    plot!(plotting, Timeline[1:end], y_s_sysid[i, 1:end], labels="Indirect Approach", lw=3.5, lc=:blue)
+    hline!(plotting, system.y_star, label=L"y^{\star}", lc=:black, lw=3.5)
     xlims!(0, T)
-    #ylims!(-3, 8)
+    ylims!(-35, 35)
     xlabel!(L"t")
     ylabel!(L"y(t)")
     savefig(plotting, dir_path * "/Compare_Gain_component$(i).png")

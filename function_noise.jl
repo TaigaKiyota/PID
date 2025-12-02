@@ -538,20 +538,20 @@ function ProjectGradient_Gain_Conststep_Noise(K_P, K_I, reset, system, prob, Opt
     while cnt < Opt.N_GD
         if Opt.projection == "diag"
             grad_P, grad_I, _, _ = grad_est_TwoPoint_diag(K_P, K_I, system, prob, Opt, reset)
-            K_P_next = K_P - eta * diagm(grad_P)
-            K_I_next = K_I - eta * diagm(grad_I)
+            K_P_next = K_P - Opt.eta * diagm(grad_P)
+            K_I_next = K_I - Opt.eta * diagm(grad_I)
             K_P_next = Projection_diagnal_interval(K_P_next, Opt, system)
             K_I_next = Projection_diagnal_interval(K_I_next, Opt, system)
         elseif Opt.projection == "Eigvals"
             grad_P, grad_I, _, _ = grad_est_TwoPoint(K_P, K_I, system, prob, Opt, reset)
-            K_P_next = K_P - eta * grad_P
-            K_I_next = K_I - eta * grad_I
+            K_P_next = K_P - Opt.eta * grad_P
+            K_I_next = K_I - Opt.eta * grad_I
             K_P_next = Projection_eigenvalues_interval(K_P_next, Opt)
             K_I_next = Projection_eigenvalues_interval(K_I_next, Opt)
         elseif Opt.projection == "Frobenius"
             grad_P, grad_I, _, _ = grad_est_TwoPoint(K_P, K_I, system, prob, Opt, reset)
-            K_P_next = K_P - eta * grad_P
-            K_I_next = K_I - eta * grad_I
+            K_P_next = K_P - Opt.eta * grad_P
+            K_I_next = K_I - Opt.eta * grad_I
             K_P_next = clip_frobenius(K_P_next, Opt)
             K_I_next = clip_frobenius(K_I_next, Opt)
         end
@@ -561,7 +561,7 @@ function ProjectGradient_Gain_Conststep_Noise(K_P, K_I, reset, system, prob, Opt
         #射影する
         #println(f_val)
         difference = sqrt(sum((K_P_next - K_P) .^ 2) + sum((K_I_next - K_I) .^ 2))
-        if (difference < Opt.epsilon_GD * eta)
+        if (difference < Opt.epsilon_GD * Opt.eta)
             push!(Kp_list, K_P)
             push!(Ki_list, K_I)
             push!(f_list, val)
@@ -605,20 +605,20 @@ function ProjGrad_Gain_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Opt)
         grad_P, grad_I = grad_noise(system, prob, K_P, K_I)
         if Opt.projection == "diag"
             grad_P, grad_I = grad_noise(system, prob, K_P, K_I)
-            K_P_next = K_P - eta * diagm(grad_P)
-            K_I_next = K_I - eta * diagm(grad_I)
+            K_P_next = K_P - Opt.eta * diagm(grad_P)
+            K_I_next = K_I - Opt.eta * diagm(grad_I)
             K_P_next = Projection_diagnal_interval(K_P_next, Opt, system)
             K_I_next = Projection_diagnal_interval(K_I_next, Opt, system)
         elseif Opt.projection == "Eigvals"
             grad_P, grad_I = grad_noise(system, prob, K_P, K_I)
-            K_P_next = K_P - eta * grad_P
-            K_I_next = K_I - eta * grad_I
+            K_P_next = K_P - Opt.eta * grad_P
+            K_I_next = K_I - Opt.eta * grad_I
             K_P_next = Projection_eigenvalues_interval(K_P_next, Opt)
             K_I_next = Projection_eigenvalues_interval(K_I_next, Opt)
         elseif Opt.projection == "Frobenius"
             grad_P, grad_I = grad_noise(system, prob, K_P, K_I)
-            K_P_next = K_P - eta * grad_P
-            K_I_next = K_I - eta * grad_I
+            K_P_next = K_P - Opt.eta * grad_P
+            K_I_next = K_I - Opt.eta * grad_I
             K_P_next = clip_frobenius(K_P_next, Opt)
             K_I_next = clip_frobenius(K_I_next, Opt)
         end
@@ -627,7 +627,7 @@ function ProjGrad_Gain_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Opt)
         #射影する
         #println(f_val)
         difference = sqrt(sum((K_P_next - K_P) .^ 2) + sum((K_I_next - K_I) .^ 2))
-        if (difference < Opt.epsilon_GD * eta)
+        if (difference < Opt.epsilon_GD * Opt.eta)
             push!(Kp_list, K_P)
             push!(Ki_list, K_I)
             push!(f_list, val)
@@ -670,25 +670,25 @@ function ProjGrad_Discrete_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Op
 
         if Opt.projection == "diag"
             grad_P, grad_I = grad_discrete_noise(system, prob, K_P, K_I)
-            K_P_next = K_P - eta * diagm(grad_P)
-            K_I_next = K_I - eta * diagm(grad_I)
+            K_P_next = K_P - Opt.eta * diagm(grad_P)
+            K_I_next = K_I - Opt.eta * diagm(grad_I)
             K_P_next = Projection_diagnal_interval(K_P_next, Opt, system)
             K_I_next = Projection_diagnal_interval(K_I_next, Opt, system)
         elseif Opt.projection == "Eigvals"
             grad_P, grad_I = grad_discrete_noise(system, prob, K_P, K_I)
-            K_P_next = K_P - eta * grad_P
-            K_I_next = K_I - eta * grad_I
+            K_P_next = K_P - Opt.eta * grad_P
+            K_I_next = K_I - Opt.eta * grad_I
             K_P_next = Projection_eigenvalues_interval(K_P_next, Opt)
             K_I_next = Projection_eigenvalues_interval(K_I_next, Opt)
         elseif Opt.projection == "Frobenius"
             grad_P, grad_I = grad_discrete_noise(system, prob, K_P, K_I)
-            K_P_next = K_P - eta * grad_P
-            K_I_next = K_I - eta * grad_I
+            K_P_next = K_P - Opt.eta * grad_P
+            K_I_next = K_I - Opt.eta * grad_I
             K_P_next = clip_frobenius(K_P_next, Opt)
             K_I_next = clip_frobenius(K_I_next, Opt)
         end
 
-        val = ObjectiveFunction_discrete_noise(system, prob, K_P, K_I)
+        val = ObjectiveFunction_discrete_noise(system, prob, K_P_next, K_I_next)
         #射影する
         #println(f_val)
         difference = sqrt(sum((K_P_next - K_P) .^ 2) + sum((K_I_next - K_I) .^ 2))
@@ -700,13 +700,16 @@ function ProjGrad_Discrete_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Op
             push!(f_list, val)
             return Kp_list, Ki_list, f_list
         end
-        cnt += 1
         if (cnt % 5000 == 0)
             println(cnt)
             println(val)
+            println("closed loop 固有値絶対値最大値",
+                maximum(abs.(
+                    eigvals(system.F - system.G * [K_P_next K_I_next] * system.H))))
             #println("勾配の推定", est_grad)
             #println("勾配", 2 * ((C * inv(A_K) * B * K_M)' * (C * inv(A_K) * B * K_M)) * (reset - u_equib))
         end
+        cnt += 1
         K_P = K_P_next
         K_I = K_I_next
 

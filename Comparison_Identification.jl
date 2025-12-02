@@ -40,8 +40,6 @@ Num_trajectory = 1
 Num_TotalSamples = Num_trajectory * Num_Samples_per_traj
 PE_power = params["PE_power"]
 
-est_system = Est_discrete_system(system, Num_TotalSamples, Num_trajectory, Steps_per_sample, Ts, T_Sysid, PE_power)
-
 Trials = 20
 list_est_system = []
 for trial in 1:Trials
@@ -52,7 +50,8 @@ for trial in 1:Trials
         Steps_per_sample,
         Ts,
         T_Sysid,
-        PE_power)
+        PE_power,
+        accuracy=accuracy)
     push!(list_est_system, est_system)
 end
 
