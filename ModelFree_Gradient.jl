@@ -15,7 +15,7 @@ using JSON
 using Dates
 
 Setting_num = 6
-simulation_name = "Vanila_parameter4_zoh"
+simulation_name = "Vanila_parameter5_zoh"
 estimated_param = false
 
 
@@ -49,10 +49,10 @@ r = params["r"]
 r = 0.09
 eta = params["eta"]
 eta = 0.001
-N_inner_obj = params["N_inner_obj"]
-N_sample = params["N_sample"]
-tau = params["tau"]
-N_GD = params["N_GD"]
+N_inner_obj = params["N_inner_obj"] #変えない
+N_sample = params["N_sample"] #変えない
+tau = params["tau"] #変えない
+N_GD = params["N_GD"] #変えない
 epsilon_GD = params["epsilon_GD"]
 
 eps_interval = 0

@@ -29,7 +29,6 @@ dir = dir * "/" * simulation_name
 params = JSON.parsefile(dir * "/params.json")
 Ts = params["Ts"]
 Num_Samples_per_traj = params["Num_Samples_per_traj"]
-Num_Samples_per_traj = 2000
 
 Steps_per_sample = Ts / system.h
 Steps_per_sample = round(Steps_per_sample)

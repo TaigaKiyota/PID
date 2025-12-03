@@ -147,7 +147,7 @@ Num_trajectory = 1 #サンプル数軌道の数
 PE_power = 20 #Setting1~4までは20でやっていた．5は1
 accuracy = "Float32"
 #Num_Samples_per_traj = Num_Samples_per_traj = 2 * N_inner_obj * N_sample * N_GD #200000 #1つの軌道につきサンプル数個数
-Num_Samples_per_traj = (2 * N_inner_obj * N_sample * N_GD * tau) / Ts
+Num_Samples_per_traj = (2 * N_inner_obj * N_sample * N_GD * tau + tau_u) / Ts
 #Num_Samples_per_traj = 5000
 Num_Samples_per_traj = Int(trunc(Num_Samples_per_traj))
 println("Num_Samples_per_traj: ", Num_Samples_per_traj)
