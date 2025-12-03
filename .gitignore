@@ -5,3 +5,10 @@ test_file/
 Comparison_SomeSetting/
 ボツ/
 trial/
+System_setting/Noise_dynamics/Settings/Setting6/VS_ModelBase/Vanila_parameter4_zoh/trial*
+
+System_setting/Noise_dynamics/Settings/Setting6/VS_ModelBase/Vanila_parameter4_zoh/Gain_MeanObj_boxplot.png
+System_setting/Noise_dynamics/Settings/Setting6/VS_ModelBase/Vanila_parameter4_zoh/Gain_MeanObj_boxplot_MFree.png
+System_setting/Noise_dynamics/Settings/Setting6/VS_ModelBase/Vanila_parameter4_zoh/Gain_MeanObj_boxplot_SysId.png
+System_setting/Noise_dynamics/Settings/Setting6/VS_ModelBase/Vanila_parameter4_zoh/list_obj_MFree_Comparison_ObjFunc.jld2
+System_setting/Noise_dynamics/Settings/Setting6/VS_ModelBase/Vanila_parameter4_zoh/list_obj_SysId_Comparison_ObjFunc.jld2

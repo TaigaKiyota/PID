@@ -136,27 +136,8 @@ end
 
 
 
-## ゲイン最適化の結果表示
-tau_eval = 500
-Iteration_obj_eval = 200
-list_obj_MFree = []
-list_obj_SysId = []
-for trial in 1:Trials
-    Obj_MFree_uhat = obj_mean_continuous(system, prob, (list_Kp_seq_ModelFree[trial])[end], (list_Ki_seq_ModelFree[trial])[end],
-        system.u_star, tau_eval, Iteration_obj_eval, h=h)
-
-    Obj_SysId = obj_mean_zoh(system, prob,
-        (list_Kp_seq_Sysid[trial])[end], (list_Ki_seq_Sysid[trial])[end],
-        system.u_star, Ts, tau_eval, Iteration_obj_eval, h=h)
-    push!(list_obj_MFree, Obj_MFree_uhat)
-    push!(list_obj_SysId, Obj_SysId)
-    println("trial $trial has done!")
-end
-
-dir_path = dir * "/Gain_meanObj"
-if !isdir(dir_path)
-    mkdir(dir_path)  # フォルダを作成
-end
+@load dir * "/list_obj_MFree_Comparison_ObjFunc.jld2" list_obj_MFree
+@load dir * "/list_obj_SysId_Comparison_ObjFunc.jld2" list_obj_SysId
 
 boxplot(list_obj_MFree,
     tickfontsize=18, yguidefont=font(20), fillcolor=:red, legend=false, outliercolor=:red, markercolor=:red)
@@ -165,15 +146,15 @@ xticks!((1:2, ["Proposed method", "Indirect approach"]))
 #yticks!([1e-2, 1e-1, 1, 10, 20], ["0.01", "0.1", "1", "10", "20"]),
 #ylims!(1e-2, 20)
 #ylabel!(L"\|\| u_0 - u^{\star} \|\|")
-savefig(dir_path * "/Gain_MeanObj_boxplot.png")
+savefig(dir * "/Gain_MeanObj_boxplot.png")
 
 boxplot(list_obj_MFree, tickfontsize=15, bar_width=0.3, yguidefont=font(18), label="Proposed method")
 xticks!((1:1, ["Proposed method"]))
 #ylabel!(L"\|\| u_0 - u^{\star} \|\|")
-savefig(dir_path * "/Gain_MeanObj_boxplot_MFree.png")
+savefig(dir * "/Gain_MeanObj_boxplot_MFree.png")
 
 boxplot(list_obj_SysId, tickfontsize=15, bar_width=0.3, yguidefont=font(18), label="Indirect approach")
 #ylabel!(L"\|\| u_0 - u^{\star} \|\|")
 xticks!((1:1, ["Indirect approach"]))
-savefig(dir_path * "/Gain_MeanObj_boxplot_SysId.png")
+savefig(dir * "/Gain_MeanObj_boxplot_SysId.png")
 

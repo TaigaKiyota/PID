@@ -100,16 +100,12 @@ Opt = Optimization_param(
 #Kp_list_MFree, Ki_list_MFree, _ = ProjectGradient_Gain_Conststep_Noise(K_P, K_I, system.u_star, system, prob, Opt)
 
 # FF推定開始
-K_P_uhat = 0.01 * I(system.p)
+K_P_uhat = 0.001 * I(system.p)
 A_K_uhat = system.A - system.B * K_P_uhat * system.C
 println(eigvals(A_K_uhat))
 # tau_uのサイズの決定
 epsilon_u = 1e-3
-Z = lyap(A_K_uhat', I(system.n))
-eigvals_Z = eigvals(Z)
-eig_max_Z = maximum(eigvals_Z)
-eig_min_Z = minimum(eigvals_Z)
-tau_u = 2 * eig_max_Z * log(sqrt(system.m * system.p) * norm(system.C, 2) * norm(inv(A_K_uhat'), 2) * norm(system.B, 2) * eig_max_Z / (eig_min_Z * epsilon_u))
+tau_u = 2 * Compute_tauu(system, K_P_uhat, epsilon_u)
 println("Estimated tau_u: ", tau_u)
 
 #ベースとなる誤差の収集

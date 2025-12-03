@@ -15,13 +15,30 @@ function Compute_tauu(system, K_P_uhat, epsilon_u)
     min_singular_D = minimum(svdvals(system.C * inv(A_K_uhat) * system.B))
     M1_1 = ((C_norm2 * (norm(system.mean_ex0) + Ak_inv_norm2 * B_norm2 * norm(system.u_star)))
             /
-            min_singular_D)
-    M1_2 = sqrt(system.m * system.p) * ((C_norm2 * Ak_inv_norm2 * B_norm2 * D_norm2)
-                                        /
-                                        (min_singular_D * norm(system.C * inv(A_K_uhat) * system.B * system.u_star))
-    )
+            (4 * min_singular_D))
+    M1_2 = 2 * sqrt(system.m * system.p) *
+           ((C_norm2 * Ak_inv_norm2 * B_norm2) * norm(system.y_star))
     M1 = max(M1_1, M1_2)
-    tau_u = 2 * eig_max_Z * log(4 * M1 * eig_max_Z / (eig_min_Z * epsilon_u))
+
+    noise_gram = system.W + system.B * K_P_uhat * system.V * (system.B * K_P_uhat)'
+    noise_gram = Symmetric(noise_gram)
+    Sigma = lyap(A_K_uhat, noise_gram)
+    M2_1 = tr(system.Sigma0) / tr(system.C * Sigma * system.C')
+    M2_2 = norm(system.Sigma0) / norm(system.C * Sigma * system.C')
+    M2 = (C_norm2 * eig_max_Z / eig_min_Z)^2 * max(M2_1, M2_2)
+
+    M3_1 = sqrt(system.m * system.p) * Ak_inv_norm2 *
+           B_norm2 * min_singular_D
+
+    M3_2 = (norm(system.mean_ex0) + Ak_inv_norm2 * B_norm2 * norm(system.u_star)) /
+           norm(system.y_star)
+    M3 = (C_norm2 * eig_max_Z / eig_min_Z) * max(M3_1, M3_2)
+
+    tau_u1 = 2 * eig_max_Z * log(
+                 max(M1 * eig_max_Z / (eig_min_Z * epsilon_u), M3)
+             )
+    tau_u2 = eig_max_Z * log(M2)
+    tau_u = max(tau_u1, tau_u2)
     return tau_u
 end
 

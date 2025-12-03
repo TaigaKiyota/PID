@@ -15,7 +15,7 @@ using JSON
 using Dates
 
 Setting_num = 6
-simulation_name = "Vanila_parameter4_zoh"
+simulation_name = "Vanila_parameter5_zoh"
 estimated_param = false
 
 
@@ -52,12 +52,12 @@ eta = 0.002 # 0.05だといい結果が出そう
 epsilon_GD = 1e-16
 delta = 0.05 # 確率のパラメータ
 eps_interval = 0
-M_interval = 10
+M_interval = 5
 
 norm_omega = sqrt(2 * system.p) * M_interval
 
 N_sample = 25 # 50
-N_GD = 35 # 200
+N_GD = 30 # 200
 N_inner_obj = 25 #20
 tau = 15
 r = 0.09
@@ -68,11 +68,7 @@ A_K_uhat = system.A - system.B * K_P_uhat * system.C
 println(eigvals(A_K_uhat))
 # tau_uのサイズの決定
 epsilon_u = 1e-3
-Z = lyap(A_K_uhat', I(system.n))
-eigvals_Z = eigvals(Z)
-eig_max_Z = maximum(eigvals_Z)
-eig_min_Z = minimum(eigvals_Z)
-tau_u = 2 * eig_max_Z * log(sqrt(system.m * system.p) * norm(system.C, 2) * norm(inv(A_K_uhat'), 2) * norm(system.B, 2) * eig_max_Z / (eig_min_Z * epsilon_u))
+tau_u = Compute_tauu(system, K_P_uhat, epsilon_u)
 println("Estimated tau_u: ", tau_u)
 
 # 理論保証によって導かれたアルゴリズムのパラメータ
@@ -146,7 +142,7 @@ Opt_discrete = Optimization_param(
 
 
 ## システム同定パラメータ
-Ts = 0.01 #サンプル間隔
+Ts = 0.005 #サンプル間隔
 Num_trajectory = 1 #サンプル数軌道の数
 PE_power = 20 #Setting1~4までは20でやっていた．5は1
 accuracy = "Float32"
