@@ -13,9 +13,10 @@ include("function_SomeSetting.jl")
 using JLD2
 using JSON
 using Dates
+ErrorNorm(A, Aans, A0) = sqrt(sum((A - Aans) .^ 2) / sum((Aans - A0) .^ 2))
 
 Setting_num = 6
-simulation_name = "Vanila_parameter4_zoh"
+simulation_name = "Vanila_parameter5_zoh"
 
 @load "System_setting/Noise_dynamics/Settings/Setting$Setting_num/Settings.jld2" Setting
 
@@ -42,6 +43,32 @@ prob = Problem_param(Q1, Q2, Q_prime, true, params["N_inner_obj"])
 
 #@load dir * "/list_ustar_Sysid.jld2" list_ustar_Sysid
 @load dir * "/list_uhat.jld2" list_uhat
+
+Trials = 20
+list_error_ystar_Sysid = []
+list_error_ystar_MFree = []
+for trial in 1:Trials
+    #ustar_sysid = list_ustar_Sysid[trial]
+    est_system = list_est_system[trial]
+    ustar_sysid = est_system.u_star
+    y_inf_sysid = -system.C * (system.A \ (system.B * ustar_sysid))
+    push!(list_error_ystar_Sysid, ErrorNorm(y_inf_sysid, system.y_star, zeros(system.m)))
+
+    uhat = list_uhat[trial]
+    y_inf_uhat = -system.C * (system.A \ (system.B * uhat))
+    push!(list_error_ystar_MFree, ErrorNorm(y_inf_uhat, system.y_star, zeros(system.m)))
+end
+
+boxplot(list_error_ystar_MFree,
+    tickfontsize=18, yguidefont=font(20), fillcolor=:red, legend=false, outliercolor=:red, markercolor=:red)
+boxplot!(list_error_ystar_Sysid, fillcolor=:blue, outliercolor=:blue, markercolor=:blue)
+xticks!((1:2, ["Proposed method", "Indirect approach"]))
+#yticks!([1e-2, 1e-1, 1, 10, 20], ["0.01", "0.1", "1", "10", "20"]),
+#ylims!(1e-2, 20)
+#ylabel!(L"\|\| u_0 - u^{\star} \|\|")
+savefig(dir * "/FF_y_error_boxplot.png")
+
+
 #@load dir * "/list_Kp_seq_Sysid.jld2" list_Kp_seq_Sysid
 #@load dir * "/list_Ki_seq_Sysid.jld2" list_Ki_seq_Sysid
 @load dir * "/list_Kp_seq_ModelFree.jld2" list_Kp_seq_ModelFree
@@ -51,11 +78,11 @@ prob = Problem_param(Q1, Q2, Q_prime, true, params["N_inner_obj"])
 @load dir * "/list_Kp_Sysid.jld2" list_Kp_Sysid
 @load dir * "/list_Ki_Sysid.jld2" list_Ki_Sysid
 ## 相対誤差を計算する関数
-ErrorNorm(A, Aans, A0) = sqrt(sum((A - Aans) .^ 2) / sum((Aans - A0) .^ 2))
+
 
 Trials = 20
 println("Num of Trials: ", Trials)
-trial = 5
+trial = 3
 
 est_system = list_est_system[trial]
 
@@ -76,8 +103,10 @@ end
 
 x_0 = zeros(system.n)
 x_0 = rand(system.rng, system.Dist_x0, system.n)
+#Vanila_parameter5_zohでは二回目の初期値の方が対比しやすい
+x_0 = rand(system.rng, system.Dist_x0, system.n)
 z_0 = zeros(system.p)
-T = 0.5
+T = 0.3
 h = 5e-4
 K_P_Mfree = (list_Kp_seq_ModelFree[trial])[end]
 K_I_Mfree = (list_Ki_seq_ModelFree[trial])[end]

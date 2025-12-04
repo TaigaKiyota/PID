@@ -15,7 +15,7 @@ using JSON
 using Dates
 
 Setting_num = 6
-simulation_name = "Vanila_parameter4_zoh"
+simulation_name = "Vanila_parameter5_zoh"
 estimated_param = false
 
 

@@ -39,7 +39,7 @@ println("Estimated tau_u: ", tau_u)
 
 
 ## システム同定パラメータ
-Ts = 0.005 #サンプル間隔
+Ts = 0.0075 #サンプル間隔
 Num_trajectory = 1 #サンプル数軌道の数
 PE_power = 20 #Setting1~4までは20でやっていた．5は1
 Num_Samples_per_traj = (system.m + 1) * tau_u / Ts
