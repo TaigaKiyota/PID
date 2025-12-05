@@ -133,10 +133,6 @@ end
 ## 結果の保存
 @save dir * "/list_ustar_Sysid.jld2" list_ustar_Sysid
 @save dir * "/list_uhat.jld2" list_uhat
-@save dir * "/list_Kp_seq_Sysid.jld2" list_Kp_seq_Sysid
-@save dir * "/list_Ki_seq_Sysid.jld2" list_Ki_seq_Sysid
-@save dir * "/list_Kp_seq_ModelFree.jld2" list_Kp_seq_ModelFree
-@save dir * "/list_Ki_seq_ModelFree.jld2" list_Ki_seq_ModelFree
 ## 相対誤差を計算するもの　
 ErrorNorm(A, Aans, A0) = sqrt(sum((A - Aans) .^ 2) / sum((Aans - A0) .^ 2))
 
@@ -166,11 +162,17 @@ println(list_error_u_MFree)
 println("yの相対誤差 提案手法", list_error_ystar_MFree)
 println("yの相対誤差 モデルベース", list_error_ystar_Sysid)
 
-boxplot(list_error_u_MFree, label="Model Free")
-boxplot!(list_error_u_Sysid, label="System Identification")
+boxplot(list_error_u_MFree,
+    tickfontsize=15, yguidefont=font(16), fillcolor=:red, legend=false, fillalpha=0.7, outliercolor=:red, markercolor=:red)
+boxplot!(list_error_u_Sysid, fillcolor=:blue, outliercolor=:blue, markercolor=:blue)
+xticks!((1:2, ["Proposed method", "Indirect approach"]))
+ylims!(1e-2, 20)
 savefig(dir * "/FF_ustar_error_boxplot.png")
 
-boxplot(list_error_ystar_MFree, label="Model Free")
-boxplot!(list_error_ystar_Sysid, label="System Identification")
+boxplot(list_error_ystar_MFree,
+    tickfontsize=15, yguidefont=font(15), fillcolor=:red, legend=false, fillalpha=0.0, outliercolor=:red, markercolor=:red)
+boxplot!(list_error_ystar_Sysid, fillcolor=:blue, fillalpha=0.0, outliercolor=:blue, markercolor=:blue)
+xticks!((1:2, ["Proposed method", "Indirect approach"]))
+ylims!(0, 0.4)
 savefig(dir * "/FF_y_error_boxplot.png")
 

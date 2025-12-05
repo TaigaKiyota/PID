@@ -15,8 +15,10 @@ using JSON
 using Dates
 
 Setting_num = 6
-simulation_name = "Vanila_parameter4_zoh"
+simulation_name = "Vanila_parameter5_zoh"
 estimated_param = false
+
+println("simulation_name: ", simulation_name)
 
 
 @load "System_setting/Noise_dynamics/Settings/Setting$Setting_num/Settings.jld2" Setting

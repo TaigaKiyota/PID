@@ -65,10 +65,11 @@ for trial in 1:Trials
     println("trial: ", trial)
     Obj_MFree_uhat = obj_mean_continuous(system, prob, (list_Kp_seq_ModelFree[trial])[end], (list_Ki_seq_ModelFree[trial])[end],
         system.u_star, tau_eval, Iteration_obj_eval, h=5e-4)
-
+    println("model free: ", Obj_MFree_uhat)
     Obj_SysId = obj_mean_zoh(system, prob,
         list_Kp_Sysid[trial], list_Ki_Sysid[trial],
         system.u_star, Ts, tau_eval, Iteration_obj_eval, h=5e-4)
+    println("Indirect approach: ", Obj_SysId)
     push!(list_obj_MFree, Obj_MFree_uhat)
     push!(list_obj_SysId, Obj_SysId)
 end
