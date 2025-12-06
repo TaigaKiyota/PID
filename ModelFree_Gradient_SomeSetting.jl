@@ -143,11 +143,11 @@ per_system_uhat = Vector{Vector{Any}}(undef, num_of_systems)
 
         ## モデルフリー最適化
         local_list_Kp_seq_ModelFree[trial], local_list_Ki_seq_ModelFree[trial], _ = ProjectGradient_Gain_Conststep_Noise(K_P, K_I, u_hat, system, prob, Opt)
+        println("iter_system $iter_system trial$trial has done ")
     end
     per_system_Kp_seq_ModelFree[iter_system] = local_list_Kp_seq_ModelFree
     per_system_Ki_seq_ModelFree[iter_system] = local_list_Ki_seq_ModelFree
     per_system_uhat[iter_system] = local_list_uhat
-    println("iter_system $iter_system has done ")
 end
 
 Dict_list_Kp_seq_ModelFree = Dict{Any,Any}()
