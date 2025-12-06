@@ -67,12 +67,11 @@ end
 
 #Dict_list_est_system = Dict{Any,Any}()
 results_per_system = Vector{Vector{Any}}(undef, num_of_systems)
-for iter_system in 1:num_of_systems
-    println("iter_system: ", iter_system)
+@threads for iter_system in 1:num_of_systems
     #システム同定
     original_system = Dict_original_systems["system$iter_system"]
     local_list = Vector{Any}(undef, Trials)
-    @threads for trial in 1:Trials
+    for trial in 1:Trials
         #@info "thread $(threadid()) trial = $trial"
         local_list[trial] = Est_discrete_system(original_system,
             Num_TotalSamples,
@@ -86,6 +85,7 @@ for iter_system in 1:num_of_systems
     end
     #Dict_list_est_system["system$iter_system"] = list_est_system
     results_per_system[iter_system] = local_list
+    println("iter_system $iter_system trial$trial has done ")
 end
 Dict_list_est_system = Dict{Any,Any}()
 for iter_system in 1:num_of_systems
