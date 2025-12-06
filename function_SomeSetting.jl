@@ -207,7 +207,15 @@ function Est_system(system, Num_TotalSamples, Num_trajectory, Steps_per_sample, 
     return est_system
 end
 
-function Est_discrete_system(system, Num_TotalSamples, Num_trajectory, Steps_per_sample, Ts, T_Sysid, PE_power; accuracy="Float64")
+function Est_discrete_system(system,
+    Num_TotalSamples,
+    Num_trajectory,
+    Steps_per_sample,
+    Ts,
+    T_Sysid,
+    PE_power;
+    accuracy="Float64",
+    true_dimension=false)
     # System identification for discrete system
     x_0 = rand(system.rng, system.Dist_x0, system.n)
     if accuracy == "Float64"
@@ -224,9 +232,9 @@ function Est_discrete_system(system, Num_TotalSamples, Num_trajectory, Steps_per
             PE_power=PE_power)
     end
 
-    println("Data has collected.")
-    println(Ys[1, 1:10])
-    println(Us[1, 1:10])
+    #println("Data has collected.")
+    #println(Ys[1, 1:10])
+    #println(Us[1, 1:10])
     Data = iddata(Ys, Us, Ts)
     Ys = nothing
     Us = nothing
@@ -234,13 +242,13 @@ function Est_discrete_system(system, Num_TotalSamples, Num_trajectory, Steps_per
     # N4sidによるシステム同定
     sys_disc = n4sid(Data, verbose=false, zeroD=true)
     #sys_disc = subspaceid(Data, system.n, verbose=false, zeroD=true)
-    println("System Identification has done")
-    Data = nothing
-    GC.gc()
+    #println("System Identification has done")
+    #Data = nothing
+    #GC.gc()
     A_est_disc, B_est_disc, C_est_disc = sys_disc.A, sys_disc.B, sys_disc.C
     W_est_disc, V_est_disc = sys_disc.Q, sys_disc.R
     n_est = size(A_est_disc, 1)
-    println("estimeated dimention: ", n_est)
+    #println("estimeated dimention: ", n_est)
     m_est = size(B_est_disc, 2)
     p_est = size(C_est_disc, 1)
     equib_est = [(A_est_disc-I(n_est)) B_est_disc; C_est_disc zeros(p_est, m_est)] \ [zeros(n_est); system.y_star]
@@ -260,8 +268,8 @@ function Est_discrete_system(system, Num_TotalSamples, Num_trajectory, Steps_per
         V_est_disc += (-Real(eigmin(V_est_disc)) + 1e-10) * I(size(V_est_disc, 1))
     end
 
-    println("minimum eigvals of W_est: ", eigmin(W_est_disc))
-    println("minimum eigvals of V_est: ", eigmin(V_est_disc))
+    #println("minimum eigvals of W_est: ", eigmin(W_est_disc))
+    #println("minimum eigvals of V_est: ", eigmin(V_est_disc))
     V_half_est_disc = cholesky(V_est_disc).L
     W_half_est_disc = cholesky(W_est_disc).L
     est_system = TargetSystem(

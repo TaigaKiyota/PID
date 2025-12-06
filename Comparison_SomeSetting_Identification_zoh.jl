@@ -13,6 +13,8 @@ include("function_SomeSetting.jl")
 using JLD2
 using JSON
 using Dates
+using Base.Threads
+Threads.nthreads()
 
 ErrorNorm(A, Aans, A0) = sqrt(sum((A - Aans) .^ 2) / sum((Aans - A0) .^ 2))
 
@@ -62,25 +64,31 @@ for iter_system in 1:num_of_systems
 end
 @save dir * "/Dict_original_systems.jld2" Dict_original_systems
 
-Dict_list_est_system = Dict{Any,Any}()
+#Dict_list_est_system = Dict{Any,Any}()
+results_per_system = Vector{Vector{Any}}(undef, num_of_systems)
 for iter_system in 1:num_of_systems
     println("iter_system: ", iter_system)
     #システム同定
     original_system = Dict_original_systems["system$iter_system"]
-    list_est_system = []
-    for trial in 1:Trials
-        println("trial: ", trial)
-        est_system = Est_discrete_system(original_system,
+    local_list = Vector{Any}(undef, Trials)
+    @threads for trial in 1:Trials
+        #println("trial: ", trial)
+        #@info "thread $(threadid()) trial = $trial"
+        local_list[trial] = Est_discrete_system(original_system,
             Num_TotalSamples,
             Num_trajectory,
             Steps_per_sample,
             Ts,
             T_Sysid,
             PE_power,
-            accuracy=accuracy)
-        push!(list_est_system, est_system)
+            accuracy=accuracy,
+            true_dimension=true)
     end
-    Dict_list_est_system["system$iter_system"] = list_est_system
+    #Dict_list_est_system["system$iter_system"] = list_est_system
+    results_per_system[iter_system] = local_list
 end
-
+Dict_list_est_system = Dict{Any,Any}()
+for iter_system in 1:num_of_systems
+    Dict_list_est_system["system$iter_system"] = results_per_system[iter_system]
+end
 @save dir * "/Dict_list_est_system.jld2" Dict_list_est_system
