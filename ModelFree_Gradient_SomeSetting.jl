@@ -13,6 +13,8 @@ include("function_SomeSetting.jl")
 using JLD2
 using JSON
 using Dates
+using Base.Threads
+
 
 Setting_num = 6
 simulation_name = "Vanila_parameter5_zoh"
@@ -23,6 +25,7 @@ println("simulation_name: ", simulation_name)
 
 dir = "Comparison_SomeSetting/Noise_dynamics/Setting$Setting_num"
 dir = dir * "/" * simulation_name
+
 @load dir * "/Dict_original_systems.jld2" Dict_original_systems
 
 dir_experiment_setting = "System_setting/Noise_dynamics/Settings/Setting$Setting_num/VS_ModelBase"
@@ -72,14 +75,14 @@ Opt = Optimization_param(
     method_name
 )
 
-Trials = 20
-num_of_systems = 20
+Trials = 5
+num_of_systems = 5
 
-Dict_list_Kp_seq_ModelFree = Dict{Any,Any}()
-Dict_list_Ki_seq_ModelFree = Dict{Any,Any}()
-Dict_list_uhat = Dict{Any,Any}()
-for iter_system in 1:num_of_systems
-    println("iter_system: ", iter_system)
+per_system_Kp_seq_ModelFree = Vector{Vector{Any}}(undef, num_of_systems)
+per_system_Ki_seq_ModelFree = Vector{Vector{Any}}(undef, num_of_systems)
+per_system_uhat = Vector{Vector{Any}}(undef, num_of_systems)
+@threads for iter_system in 1:num_of_systems
+    #println("iter_system: ", iter_system)
     #システム同定
     system = Dict_original_systems["system$iter_system"]
 
@@ -109,12 +112,11 @@ for iter_system in 1:num_of_systems
     tau_u = Compute_tauu(system, K_P_uhat, epsilon_u)
     println("Estimated tau_u: ", tau_u)
 
-    list_Kp_seq_ModelFree = []
-    list_Ki_seq_ModelFree = []
-    list_uhat = []
+    local_list_Kp_seq_ModelFree = Vector{Any}(undef, Trials)
+    local_list_Ki_seq_ModelFree = Vector{Any}(undef, Trials)
+    local_list_uhat = Vector{Any}(undef, Trials)
     for trial in 1:Trials
         ## 最適化問題のパラメータ
-        println("trial: ", trial)
         ## FF 推定
         #ベースとなる誤差の収集
         x_0 = rand(system.rng, system.Dist_x0, system.n)
@@ -137,16 +139,25 @@ for iter_system in 1:num_of_systems
             Ematrix[:, i] = error_i - error_zero
         end
         u_hat = -Ematrix' * inv(Ematrix * Ematrix') * error_zero
-        push!(list_uhat, u_hat)
+        local_list_uhat[trial] = u_hat
 
         ## モデルフリー最適化
-        Kp_seq_MFree_uhat, Ki_seq_MFree_uhat, _ = ProjectGradient_Gain_Conststep_Noise(K_P, K_I, u_hat, system, prob, Opt)
-        push!(list_Kp_seq_ModelFree, Kp_seq_MFree_uhat)
-        push!(list_Ki_seq_ModelFree, Ki_seq_MFree_uhat)
+        local_list_Kp_seq_ModelFree[trial], local_list_Ki_seq_ModelFree[trial], _ = ProjectGradient_Gain_Conststep_Noise(K_P, K_I, u_hat, system, prob, Opt)
     end
-    Dict_list_Kp_seq_ModelFree["system$iter_system"] = list_Kp_seq_ModelFree
-    Dict_list_Ki_seq_ModelFree["system$iter_system"] = list_Ki_seq_ModelFree
-    Dict_list_uhat["system$iter_system"] = list_uhat
+    per_system_Kp_seq_ModelFree[iter_system] = local_list_Kp_seq_ModelFree
+    per_system_Ki_seq_ModelFree[iter_system] = local_list_Ki_seq_ModelFree
+    per_system_uhat[iter_system] = local_list_uhat
+    println("iter_system $iter_system has done ")
+end
+
+Dict_list_Kp_seq_ModelFree = Dict{Any,Any}()
+Dict_list_Ki_seq_ModelFree = Dict{Any,Any}()
+Dict_list_uhat = Dict{Any,Any}()
+
+for iter_system in 1:num_of_systems
+    Dict_list_Kp_seq_ModelFree["system$iter_system"] = per_system_Kp_seq_ModelFree[iter_system]
+    Dict_list_Ki_seq_ModelFree["system$iter_system"] = per_system_Ki_seq_ModelFree[iter_system]
+    Dict_list_uhat["system$iter_system"] = per_system_uhat[iter_system]
 end
 
 @save dir * "/Dict_list_uhat.jld2" Dict_list_uhat
