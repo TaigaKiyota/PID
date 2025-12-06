@@ -15,7 +15,7 @@ using JSON
 using Dates
 
 Setting_num = 6
-simulation_name = "Vanila_parameter5_zoh"
+simulation_name = "Vanila_parameter6_zoh"
 estimated_param = false
 
 println("simulation_name: ", simulation_name)
@@ -44,7 +44,7 @@ PE_power = params["PE_power"]
 Trials = 20
 list_est_system = []
 for trial in 1:Trials
-    println("trial: ", trial)
+    #println("trial: ", trial)
     est_system = Est_discrete_system(system,
         Num_TotalSamples,
         Num_trajectory,

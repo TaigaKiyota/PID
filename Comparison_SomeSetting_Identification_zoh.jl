@@ -19,7 +19,7 @@ Threads.nthreads()
 ErrorNorm(A, Aans, A0) = sqrt(sum((A - Aans) .^ 2) / sum((Aans - A0) .^ 2))
 
 Setting_num = 6
-simulation_name = "Vanila_parameter5_zoh"
+simulation_name = "Vanila_parameter6_zoh"
 
 println("simulation_name: ", simulation_name)
 
@@ -58,7 +58,8 @@ Dict_original_systems = Dict{Any,Any}()
 for iter_system in 1:num_of_systems
     println("iter_system: ", iter_system)
     seed_gen_system = rand(rng_parent, UInt64)
-    seed_attr_system = rand(rng_parent, UInt64)
+    #seed_attr_system = rand(rng_parent, UInt64)
+    seed_attr_system = 42 * iter_system
     original_system = Generate_system(seed_gen_system, seed_attr_system, Setting_num)
     Dict_original_systems["system$iter_system"] = original_system
 end
@@ -72,7 +73,6 @@ for iter_system in 1:num_of_systems
     original_system = Dict_original_systems["system$iter_system"]
     local_list = Vector{Any}(undef, Trials)
     @threads for trial in 1:Trials
-        #println("trial: ", trial)
         #@info "thread $(threadid()) trial = $trial"
         local_list[trial] = Est_discrete_system(original_system,
             Num_TotalSamples,
