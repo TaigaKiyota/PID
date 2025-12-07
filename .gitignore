@@ -12,3 +12,5 @@ System_setting/Noise_dynamics/Settings/Setting6/VS_ModelBase/Vanila_parameter4_z
 System_setting/Noise_dynamics/Settings/Setting6/VS_ModelBase/Vanila_parameter4_zoh/Gain_MeanObj_boxplot_SysId.png
 System_setting/Noise_dynamics/Settings/Setting6/VS_ModelBase/Vanila_parameter4_zoh/list_obj_MFree_Comparison_ObjFunc.jld2
 System_setting/Noise_dynamics/Settings/Setting6/VS_ModelBase/Vanila_parameter4_zoh/list_obj_SysId_Comparison_ObjFunc.jld2
+
+Check_nonconvixity.jl
