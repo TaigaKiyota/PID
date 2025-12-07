@@ -59,7 +59,7 @@ norm_omega = sqrt(2 * system.p) * M_interval
 N_sample = 20 # 50
 N_GD = 30 # 200
 N_inner_obj = 25 #20
-tau = 15
+tau = 10
 r = 0.09
 
 # FF推定のためのパラメータ
