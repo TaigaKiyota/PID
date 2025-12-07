@@ -82,10 +82,10 @@ results_per_system = Vector{Vector{Any}}(undef, num_of_systems)
             PE_power,
             accuracy=accuracy,
             true_dimension=true)
+        println("iter_system $iter_system trial$trial has done ")
     end
     #Dict_list_est_system["system$iter_system"] = list_est_system
     results_per_system[iter_system] = local_list
-    println("iter_system $iter_system trial$trial has done ")
 end
 Dict_list_est_system = Dict{Any,Any}()
 for iter_system in 1:num_of_systems
