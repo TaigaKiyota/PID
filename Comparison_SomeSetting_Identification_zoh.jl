@@ -51,7 +51,7 @@ Num_TotalSamples = Num_trajectory * Num_Samples_per_traj
 PE_power = params["PE_power"]
 
 Trials = 20
-num_of_systems = 20
+num_of_systems = 10
 rng_parent = MersenneTwister(1)
 Dict_original_systems = Dict{Any,Any}()
 #システムの生成

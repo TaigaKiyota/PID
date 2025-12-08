@@ -14,7 +14,7 @@ using JLD2
 using JSON
 using Dates
 using Base.Threads
-
+Threads.nthreads()
 
 Setting_num = 6
 simulation_name = "Vanila_parameter5_zoh"
@@ -78,6 +78,13 @@ Opt = Optimization_param(
 Trials = 5
 num_of_systems = 5
 
+struct Problem_param
+    Q1
+    Q2
+    Q_prime
+    last_value
+end
+
 per_system_Kp_seq_ModelFree = Vector{Vector{Any}}(undef, num_of_systems)
 per_system_Ki_seq_ModelFree = Vector{Vector{Any}}(undef, num_of_systems)
 per_system_uhat = Vector{Vector{Any}}(undef, num_of_systems)
@@ -92,12 +99,6 @@ per_system_uhat = Vector{Vector{Any}}(undef, num_of_systems)
     Q_prime = [system.C'*Q1*system.C zeros(system.n, system.p); zeros(system.p, system.n) Q2]
     Q_prime = Symmetric((Q_prime + Q_prime') / 2)
     last_value = true
-    struct Problem_param
-        Q1
-        Q2
-        Q_prime
-        last_value
-    end
     prob = Problem_param(Q1, Q2, Q_prime, last_value)
 
     K_P = 1.0 * I(system.p)
@@ -106,7 +107,6 @@ per_system_uhat = Vector{Vector{Any}}(undef, num_of_systems)
     # FF推定のためのパラメータ
     K_P_uhat = 0.001 * I(system.p) #手動で決める？
     A_K_uhat = system.A - system.B * K_P_uhat * system.C
-    println(eigvals(A_K_uhat))
     # tau_uのサイズの決定
     epsilon_u = 1e-3
     tau_u = Compute_tauu(system, K_P_uhat, epsilon_u)

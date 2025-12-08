@@ -170,8 +170,8 @@ ylims!(1e-2, 20)
 savefig(dir * "/FF_ustar_error_boxplot.png")
 
 boxplot(list_error_ystar_MFree,
-    tickfontsize=15, yguidefont=font(15), fillcolor=:red, legend=false, fillalpha=0.0, outliercolor=:red, markercolor=:red)
-boxplot!(list_error_ystar_Sysid, fillcolor=:blue, fillalpha=0.0, outliercolor=:blue, markercolor=:blue)
+    tickfontsize=15, yguidefont=font(15), fillcolor=:red, legend=false, fillalpha=0.0, outliercolor=:white, markercolor=:white)
+boxplot!(list_error_ystar_Sysid, fillcolor=:blue, fillalpha=0.0, outliercolor=:white, markercolor=:white)
 xticks!((1:2, ["Proposed method", "Indirect approach"]))
 ylims!(0, 0.4)
 savefig(dir * "/FF_y_error_boxplot.png")
