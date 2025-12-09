@@ -6,6 +6,11 @@ using LaTeXStrings
 using ControlSystems
 using StatsPlots
 
+using Profile
+using LinuxPerf
+using BenchmarkTools
+
+
 include("function_noise.jl")
 include("function_orbit.jl")
 include("function_AlgoParam.jl")
@@ -18,8 +23,8 @@ Threads.nthreads()
 
 ErrorNorm(A, Aans, A0) = sqrt(sum((A - Aans) .^ 2) / sum((Aans - A0) .^ 2))
 
-Setting_num = 6
-simulation_name = "Vanila_parameter6_zoh"
+Setting_num = 10
+simulation_name = "Vanila_parameter_zoh"
 
 println("simulation_name: ", simulation_name)
 
@@ -39,10 +44,11 @@ dir_experiment_setting = dir_experiment_setting * "/" * simulation_name
 params = JSON.parsefile(dir_experiment_setting * "/params.json")
 Ts = params["Ts"]
 Num_Samples_per_traj = params["Num_Samples_per_traj"]
-
-h = 0.0005 #時間刻み幅必要に応じて変える
+#Num_Samples_per_traj = 1000000
+h = 0.005 #時間刻み幅必要に応じて変える
 Steps_per_sample = Ts / h
 Steps_per_sample = round(Steps_per_sample)
+println("Steps_per_sample: ", Steps_per_sample)
 
 accuracy = params["accuracy"]
 T_Sysid = Ts * Num_Samples_per_traj
@@ -50,7 +56,7 @@ Num_trajectory = 1
 Num_TotalSamples = Num_trajectory * Num_Samples_per_traj
 PE_power = params["PE_power"]
 
-Trials = 20
+Trials = 10
 num_of_systems = 10
 rng_parent = MersenneTwister(1)
 Dict_original_systems = Dict{Any,Any}()
@@ -67,7 +73,7 @@ end
 
 #Dict_list_est_system = Dict{Any,Any}()
 results_per_system = Vector{Vector{Any}}(undef, num_of_systems)
-@threads for iter_system in 1:num_of_systems
+for iter_system in 1:num_of_systems
     #システム同定
     original_system = Dict_original_systems["system$iter_system"]
     local_list = Vector{Any}(undef, Trials)

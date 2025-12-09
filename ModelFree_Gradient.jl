@@ -14,8 +14,8 @@ using JLD2
 using JSON
 using Dates
 
-Setting_num = 6
-simulation_name = "Vanila_parameter6_zoh"
+Setting_num = 10
+simulation_name = "Vanila_parameter_zoh"
 estimated_param = false
 
 
@@ -48,7 +48,7 @@ prob = Problem_param(Q1, Q2, Q_prime, last_value)
 r = params["r"]
 r = 0.09
 eta = params["eta"]
-eta = 0.001
+eta = 0.0025
 N_inner_obj = params["N_inner_obj"] #変えない
 N_sample = params["N_sample"] #変えない
 tau = params["tau"] #変えない

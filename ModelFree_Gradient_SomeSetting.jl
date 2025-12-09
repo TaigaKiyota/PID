@@ -16,8 +16,8 @@ using Dates
 using Base.Threads
 Threads.nthreads()
 
-Setting_num = 6
-simulation_name = "Vanila_parameter5_zoh"
+Setting_num = 10
+simulation_name = "Vanila_parameter_zoh"
 estimated_param = false
 
 

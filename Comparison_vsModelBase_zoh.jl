@@ -14,8 +14,8 @@ using JLD2
 using JSON
 using Dates
 
-Setting_num = 6
-simulation_name = "Vanila_parameter6_zoh"
+Setting_num = 10
+simulation_name = "Vanila_parameter_zoh"
 estimated_param = false
 
 
@@ -56,9 +56,9 @@ M_interval = 5
 
 norm_omega = sqrt(2 * system.p) * M_interval
 
-N_sample = 20 # 50
+N_sample = 15 # 50
 N_GD = 20 # 200
-N_inner_obj = 25 #20
+N_inner_obj = 20 #20
 tau = 10
 r = 0.09
 
@@ -142,7 +142,7 @@ Opt_discrete = Optimization_param(
 
 
 ## システム同定パラメータ
-Ts = 0.0075 #サンプル間隔
+Ts = 0.01 #サンプル間隔
 Num_trajectory = 1 #サンプル数軌道の数
 PE_power = 20 #Setting1~4までは20でやっていた．5は1
 accuracy = "Float32"

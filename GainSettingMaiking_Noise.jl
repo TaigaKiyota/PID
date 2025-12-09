@@ -209,9 +209,9 @@ elseif Setting_num == 9
     h = 0.001
     Dist_x0 = Uniform(-3, 3)
 elseif Setting_num == 10
-    # Setting_num 10から時間幅を細かく
-    n = 30
-    m = 4
+    # Setting_num ６から次元数を落とす
+    n = 20
+    m = 2
     p = m
     y_star = 5 * ones(p)
 
@@ -223,13 +223,9 @@ elseif Setting_num == 10
     A = (J - R) * Hamilton
     B = 3 * randn(rng, Float64, (n, m))
     C = B' * Hamilton
-    Randmat_w = randn(rng, Float64, (n, n))
-    Rand_w = Randmat_w * Randmat_w'
-    W = 0.001 * Rand_w
-    Randmat_p = randn(rng, Float64, (p, p))
-    Rand_p = Randmat_p * Randmat_p'
-    V = 0.0005 * Rand_p
-    h = 0.0001
+    W = 0.01 * I(n)
+    V = 0.0005 * I(p)
+    h = 0.0005
     Dist_x0 = Uniform(-3, 3)
 end
 

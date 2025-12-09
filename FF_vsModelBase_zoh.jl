@@ -14,8 +14,8 @@ using JLD2
 using JSON
 using Dates
 
-Setting_num = 6
-simulation_name = "FF_Vanila_parameter6_zoh"
+Setting_num = 10
+simulation_name = "FF_Vanila_parameter2_zoh"
 estimated_param = false
 
 
@@ -26,7 +26,7 @@ system = Setting["system"]
 
 n_dim = true # システム同定の際に状態空間の次元を情報として与えるか
 
-Trials = 20
+Trials = 10
 
 # FF推定のためのパラメータ
 K_P_uhat = 0.001 * I(system.p)
@@ -39,7 +39,7 @@ println("Estimated tau_u: ", tau_u)
 
 
 ## システム同定パラメータ
-Ts = 0.0075 #サンプル間隔
+Ts = 0.01 #サンプル間隔
 Num_trajectory = 1 #サンプル数軌道の数
 PE_power = 20 #Setting1~4までは20でやっていた．5は1
 Num_Samples_per_traj = (system.m + 1) * tau_u / Ts
@@ -173,6 +173,6 @@ boxplot(list_error_ystar_MFree,
     tickfontsize=15, yguidefont=font(15), fillcolor=:red, legend=false, fillalpha=0.0, outliercolor=:white, markercolor=:white)
 boxplot!(list_error_ystar_Sysid, fillcolor=:blue, fillalpha=0.0, outliercolor=:white, markercolor=:white)
 xticks!((1:2, ["Proposed method", "Indirect approach"]))
-ylims!(0, 0.4)
+ylims!(0, 0.2)
 savefig(dir * "/FF_y_error_boxplot.png")
 

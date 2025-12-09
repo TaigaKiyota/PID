@@ -5,6 +5,9 @@ using Plots
 using LaTeXStrings
 using ControlSystems
 using StatsPlots
+using Profile
+using LinuxPerf
+using BenchmarkTools
 
 include("function_noise.jl")
 include("function_orbit.jl")
@@ -32,6 +35,7 @@ params = JSON.parsefile(dir * "/params.json")
 Ts = params["Ts"]
 Num_Samples_per_traj = params["Num_Samples_per_traj"]
 
+
 Steps_per_sample = Ts / system.h
 Steps_per_sample = round(Steps_per_sample)
 
@@ -40,7 +44,49 @@ T_Sysid = Ts * Num_Samples_per_traj
 Num_trajectory = 1
 Num_TotalSamples = Num_trajectory * Num_Samples_per_traj
 PE_power = params["PE_power"]
+#=
+x_0 = rand(system.rng, system.Dist_x0, system.n)
+Us, Ys = Orbit_Identification_noise_Float32(system,
+    x_0,
+    T_Sysid,
+    Ts=Ts,
+    PE_power=PE_power)
+println("微分方程式")
+@btime Orbit_Identification_noise_Float32(system,
+    x_0,
+    T_Sysid,
+    Ts=Ts,
+    PE_power=PE_power)
+println("データ変換")
+@btime iddata(Ys, Us, Ts)
+Data = iddata(Ys, Us, Ts)
+Ys = nothing
+Us = nothing
+GC.gc()
+# N4sidによるシステム同定
+println("システム同定")
+@btime n4sid(Data, verbose=false, zeroD=true)
+sys_disc = n4sid(Data, verbose=false, zeroD=true)
 
+@btime Est_discrete_system(system,
+    Num_TotalSamples,
+    Num_trajectory,
+    Steps_per_sample,
+    Ts,
+    T_Sysid,
+    PE_power,
+    accuracy=accuracy)
+@pstats Est_discrete_system(system,
+    Num_TotalSamples,
+    Num_trajectory,
+    Steps_per_sample,
+    Ts,
+    T_Sysid,
+    PE_power,
+    accuracy=accuracy)
+
+Profile.print()
+=#
 Trials = 20
 list_est_system = []
 for trial in 1:Trials

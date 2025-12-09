@@ -745,10 +745,6 @@ function Orbit_Identification_noise_succinct(system, x_0, T; Ts=10, PE_power=20,
 end
 
 function Orbit_Identification_noise_Float32(system, x_0, T; Ts=10, PE_power=20, N=0)
-    if N == 0
-        N = Int(round(T / system.h))
-    end
-
     length = Int(round(T / Ts))
 
     N_persample = Int(round(Ts / system.h))
@@ -779,7 +775,7 @@ function Orbit_Identification_noise_Float32(system, x_0, T; Ts=10, PE_power=20, 
 
     sqrt_PE = Float32(sqrt(PE_power))
     sqrt_h = Float32(sqrt(system.h))
-    y_s[:, 1] = system.C * x_0
+    y_s[:, 1] = system.C * x
 
     @views for i in 1:length
         # 入力ノイズ：既存バッファに randn! で書き込み
@@ -788,7 +784,7 @@ function Orbit_Identification_noise_Float32(system, x_0, T; Ts=10, PE_power=20, 
         u_s[:, i] .= u_buf
 
         # N_persample ステップ時間発展（Euler–Maruyama）
-        for k in 1:N_persample
+        @inbounds for k in 1:N_persample
             # Ax_buf = A*x, Bu_buf = B*u_buf
             mul!(Ax_buf, A, x)
             mul!(Bu_buf, B, u_buf)
