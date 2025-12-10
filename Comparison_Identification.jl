@@ -17,8 +17,8 @@ using JLD2
 using JSON
 using Dates
 
-Setting_num = 6
-simulation_name = "Vanila_parameter6_zoh"
+Setting_num = 10
+simulation_name = "Vanila_parameter_zoh"
 estimated_param = false
 
 println("simulation_name: ", simulation_name)
@@ -87,7 +87,7 @@ sys_disc = n4sid(Data, verbose=false, zeroD=true)
 
 Profile.print()
 =#
-Trials = 20
+Trials = 10
 list_est_system = []
 for trial in 1:Trials
     #println("trial: ", trial)

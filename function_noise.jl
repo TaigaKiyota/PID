@@ -145,6 +145,72 @@ function grad_discrete_noise(system, prob, K_P, K_I)
     return grad_P, grad_I
 end
 
+# 事前割り当てしたバッファを使ってW_tildeやBK_Pを上書きし、メモリ確保を抑える版
+mutable struct GradObjDiscWorkspace{T}
+    BK_P::Matrix{T}     # n × p
+    tmp_nxp::Matrix{T}  # n × p (BK_P * V 用)
+    W_tilde::Matrix{T}  # (n+p) × (n+p)
+end
+
+function GradObj_buffer(system)
+    TypeA = eltype(system.A)
+    BK_P = zeros(TypeA, system.n, system.p)
+    tmp_nxp = zeros(TypeA, system.n, system.p)
+    W_tilde = zeros(TypeA, system.n + system.p, system.n + system.p)
+    return GradObjDiscWorkspace(BK_P, tmp_nxp, W_tilde)
+end
+
+function grad_obj_discrete_noise!(workspace::GradObjDiscWorkspace, system, prob, K_P, K_I)
+    BK_P = workspace.BK_P
+    tmp = workspace.tmp_nxp
+    W_tilde = workspace.W_tilde
+
+    # BK_P と BK_P*V を再利用可能なバッファに計算
+    mul!(BK_P, system.B, K_P)          # n × p
+    mul!(tmp, BK_P, system.V)          # n × p
+
+    n = system.n
+    p = system.p
+
+    # W_tilde = [W + BK_P*V*BK_P'   BK_P*V;  V*BK_P'   V]
+    Wtl = @view W_tilde[1:n, 1:n]
+    copyto!(Wtl, system.W)
+    mul!(Wtl, tmp, BK_P', 1.0, 1.0)    # Wtl = Wtl + tmp * BK_P'
+
+    Wtr = @view W_tilde[1:n, n+1:n+p]
+    copyto!(Wtr, tmp)
+
+    Wbl = @view W_tilde[n+1:n+p, 1:n]
+    mul!(Wbl, system.V, BK_P', 1.0, 0.0)
+
+    Wbr = @view W_tilde[n+1:n+p, n+1:n+p]
+    copyto!(Wbr, system.V)
+
+    F_K = system.F - system.G * [K_P K_I] * system.H
+    X = lyapd(F_K, W_tilde)
+    Y = lyapd(F_K', prob.Q_prime)
+    obj = sum(X .* prob.Q_prime) + sum(prob.Q1 .* system.V)
+    Z = -2 * system.G' * Y * F_K * X * system.H'
+    grad_P = Z[:, 1:p] + 2 * system.G' * Y * [BK_P; 1I(p)] * system.V
+    grad_I = Z[:, p+1:2*p]
+    return grad_P, grad_I, obj
+end
+
+
+# 目的値と勾配を同時に計算し、lyapdの重複計算を避けるヘルパー
+function grad_obj_discrete_noise(system, prob, K_P, K_I)
+    F_K = system.F - system.G * [K_P K_I] * system.H
+    BK_P = system.B * K_P
+    W_tilde = [system.W+BK_P*system.V*BK_P' BK_P*system.V; system.V*BK_P' system.V]
+    X = lyapd(F_K, W_tilde)
+    Y = lyapd(F_K', prob.Q_prime)
+    obj = sum(X .* prob.Q_prime) + sum(prob.Q1 .* system.V)
+    Z = -2 * system.G' * Y * F_K * X * system.H'
+    grad_P = Z[:, 1:system.p] + 2 * system.G' * Y * [BK_P; 1I(system.p)] * system.V
+    grad_I = Z[:, system.p+1:2*system.p]
+    return grad_P, grad_I, obj
+end
+
 # シミュレーションによる有限区間打ち切り目的関数
 function obj_lastvalue(system, prob, K_P, K_I, x_0, reset, tau)
 
@@ -665,23 +731,25 @@ function ProjGrad_Discrete_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Op
     val = ObjectiveFunction_discrete_noise(system, prob, K_P, K_I)
     println("目的関数: ", val)
     push!(f_list, val)
+    ws = GradObj_buffer(system)
 
     while cnt < Opt.N_GD
-
+        #grad_P, grad_I = grad_obj_discrete_noise(system, prob, K_P, K_I)
+        grad_P, grad_I = grad_obj_discrete_noise!(ws, system, prob, K_P, K_I)
         if Opt.projection == "diag"
-            grad_P, grad_I = grad_discrete_noise(system, prob, K_P, K_I)
+
             K_P_next = K_P - Opt.eta * diagm(grad_P)
             K_I_next = K_I - Opt.eta * diagm(grad_I)
             K_P_next = Projection_diagnal_interval(K_P_next, Opt, system)
             K_I_next = Projection_diagnal_interval(K_I_next, Opt, system)
         elseif Opt.projection == "Eigvals"
-            grad_P, grad_I = grad_discrete_noise(system, prob, K_P, K_I)
+
             K_P_next = K_P - Opt.eta * grad_P
             K_I_next = K_I - Opt.eta * grad_I
             K_P_next = Projection_eigenvalues_interval(K_P_next, Opt)
             K_I_next = Projection_eigenvalues_interval(K_I_next, Opt)
         elseif Opt.projection == "Frobenius"
-            grad_P, grad_I = grad_discrete_noise(system, prob, K_P, K_I)
+
             K_P_next = K_P - Opt.eta * grad_P
             K_I_next = K_I - Opt.eta * grad_I
             K_P_next = clip_frobenius(K_P_next, Opt)
@@ -691,8 +759,7 @@ function ProjGrad_Discrete_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Op
         val = ObjectiveFunction_discrete_noise(system, prob, K_P_next, K_I_next)
         #射影する
         #println(f_val)
-        difference = sqrt(sum((K_P_next - K_P) .^ 2) + sum((K_I_next - K_I) .^ 2))
-        if (difference < Opt.epsilon_GD * Opt.eta)
+        if (sqrt(sum((K_P_next - K_P) .^ 2) + sum((K_I_next - K_I) .^ 2)) < Opt.epsilon_GD * Opt.eta)
             println(cnt)
             println(val)
             push!(Kp_list, K_P)
@@ -700,7 +767,7 @@ function ProjGrad_Discrete_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Op
             push!(f_list, val)
             return Kp_list, Ki_list, f_list
         end
-        if (cnt % 5000 == 0)
+        if (cnt % 50000 == 0)
             println(cnt)
             println(val)
             println("closed loop 固有値絶対値最大値",
@@ -720,5 +787,3 @@ function ProjGrad_Discrete_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Op
     end
     return Kp_list, Ki_list, f_list
 end
-
-
