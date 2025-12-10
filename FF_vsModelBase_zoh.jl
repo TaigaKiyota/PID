@@ -15,14 +15,21 @@ using JSON
 using Dates
 
 Setting_num = 10
-simulation_name = "FF_Vanila_parameter2_zoh"
+simulation_name = "FF_Vanila_parameter_zoh"
 estimated_param = false
+SomeSetting = true
 
-
-@load "System_setting/Noise_dynamics/Settings/Setting$Setting_num/Settings.jld2" Setting
-
-
-system = Setting["system"]
+if SomeSetting
+    iter_system = 1
+    simulation_name_param = "Vanila_parameter_zoh"
+    dir_comparison = "Comparison_SomeSetting/Noise_dynamics/Setting$Setting_num"
+    dir_comparison = dir_comparison * "/" * simulation_name_param
+    @load dir_comparison * "/Dict_original_systems.jld2" Dict_original_systems
+    system = Dict_original_systems["system$iter_system"]
+else
+    @load "System_setting/Noise_dynamics/Settings/Setting$Setting_num/Settings.jld2" Setting
+    system = Setting["system"]
+end
 
 n_dim = true # システム同定の際に状態空間の次元を情報として与えるか
 
@@ -36,8 +43,6 @@ println(eigvals(A_K_uhat))
 epsilon_u = 1e-3
 tau_u = Compute_tauu(system, K_P_uhat, epsilon_u)
 println("Estimated tau_u: ", tau_u)
-
-
 ## システム同定パラメータ
 Ts = 0.01 #サンプル間隔
 Num_trajectory = 1 #サンプル数軌道の数
@@ -55,6 +60,10 @@ T_Sysid = Ts * Num_Samples_per_traj
 
 ## ディレクトリ作成
 dir = "System_setting/Noise_dynamics/Settings/Setting$Setting_num/VS_ModelBase"
+if SomeSetting
+    dir = dir_comparison
+end
+
 if !isdir(dir)
     mkdir(dir)  # フォルダを作成
 end
@@ -173,6 +182,6 @@ boxplot(list_error_ystar_MFree,
     tickfontsize=15, yguidefont=font(15), fillcolor=:red, legend=false, fillalpha=0.0, outliercolor=:white, markercolor=:white)
 boxplot!(list_error_ystar_Sysid, fillcolor=:blue, fillalpha=0.0, outliercolor=:white, markercolor=:white)
 xticks!((1:2, ["Proposed method", "Indirect approach"]))
-ylims!(0, 0.2)
+ylims!(0, 0.35)
 savefig(dir * "/FF_y_error_boxplot.png")
 

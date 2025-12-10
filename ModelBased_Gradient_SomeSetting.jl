@@ -47,9 +47,9 @@ dir_experiment_setting = dir_experiment_setting * "/" * simulation_name
 params = JSON.parsefile(dir_experiment_setting * "/params.json")
 
 eta_discrete = params["eta_discrete"]
-eta_discrete = 0.001
+eta_discrete = 0.0001
 epsilon_GD_discrete = params["epsilon_GD_discrete"]
-N_GD_discrete = 500000
+N_GD_discrete = 500000 #500000
 projection = params["projection"]
 println("eta_discrete: ", eta_discrete)
 
