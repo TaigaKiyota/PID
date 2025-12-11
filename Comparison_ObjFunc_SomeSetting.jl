@@ -7,9 +7,15 @@ using ControlSystems
 using StatsPlots
 using Statistics
 
+using Profile
+using LinuxPerf
+using BenchmarkTools
+
+
 include("function_noise.jl")
 include("function_orbit.jl")
 include("function_SomeSetting.jl")
+include("function_eval_performance.jl")
 using JLD2
 using JSON
 using Dates
@@ -56,7 +62,11 @@ ErrorNorm(A, Aans, A0) = sqrt(sum((A - Aans) .^ 2) / sum((Aans - A0) .^ 2))
 
 ## ゲイン最適化の結果表示
 
-tau_eval = 100
+h_cont = 0.002
+println("h_cont: ", h_cont)
+h_zoh = 0.002
+println("h_zoh: ", h_zoh)
+tau_eval = 300
 Iteration_obj_eval = 200
 per_system_list_obj_MFree = Vector{Vector{Float64}}(undef, num_of_systems)
 per_system_list_obj_SysId = Vector{Vector{Float64}}(undef, num_of_systems)
@@ -74,15 +84,15 @@ for iter_system in 1:num_of_systems
     list_obj_SysId = Vector{Float64}(undef, Trials)
     for trial in 1:Trials
         println("trial: ", trial)
-        Obj_MFree_uhat = obj_mean_continuous(system, prob,
+        Obj_MFree_uhat = obj_mean_continuous_reuse(system, prob,
             ((Dict_list_Kp_seq_ModelFree["system$iter_system"])[trial])[end],
             ((Dict_list_Ki_seq_ModelFree["system$iter_system"])[trial])[end],
-            system.u_star, tau_eval, Iteration_obj_eval, h=5e-4)
+            system.u_star, tau_eval, Iteration_obj_eval, h=h_cont)
         println("model free: ", Obj_MFree_uhat)
-        Obj_SysId = obj_mean_zoh(system, prob,
+        Obj_SysId = obj_mean_zoh_reuse(system, prob,
             Dict_list_Kp_Sysid["system$iter_system"][trial],
             Dict_list_Ki_Sysid["system$iter_system"][trial],
-            system.u_star, Ts, tau_eval, Iteration_obj_eval, h=5e-4)
+            system.u_star, Ts, tau_eval, Iteration_obj_eval, h=h_zoh)
         println("Indirect approach: ", Obj_SysId)
         list_obj_MFree[trial] = Obj_MFree_uhat
         list_obj_SysId[trial] = Obj_SysId

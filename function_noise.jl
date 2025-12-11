@@ -324,8 +324,8 @@ function obj_trunc(system, prob, K_P, K_I, x_0, reset, tau)
 end
 
 #軌道を受け取って，有限打ち切り目的関数を計算
-function obj_trunc_from_traj(system, prob, y_s, z_s, tau)
-    Nstep = Int(tau / system.h)
+function obj_trunc_from_traj(system, prob, y_s, z_s, tau, h)
+    Nstep = Int(round(tau / h))
     Q1 = prob.Q1
     Q2 = prob.Q2
     y_star = system.y_star
@@ -368,7 +368,7 @@ function obj_trunc_from_traj(system, prob, y_s, z_s, tau)
         acc += dot(e, Q1e) + dot(z, Q2z)
     end
 
-    acc *= system.h
+    acc *= h
     acc /= tau
     return acc
 
@@ -404,11 +404,9 @@ function obj_mean_zoh(system, prob, K_P, K_I, u_hat, Ts, tau, Iteration_obj; h=0
         x_0 = rand(system.rng, system.Dist_x0, system.n)
         u_s, y_s, z_s = Orbit_zoh_PI(system, K_P, K_I, u_hat, x_0, tau, Ts=Ts, h=h)
         u_s = nothing
-        GC.gc()
-        mean_obj = mean_obj + obj_trunc_from_traj(system, prob, y_s, z_s, tau)
+        mean_obj = mean_obj + obj_trunc_from_traj(system, prob, y_s, z_s, tau, h)
         y_s = nothing
         z_s = nothing
-        GC.gc()
     end
     return mean_obj / Iteration_obj
 end
@@ -420,11 +418,9 @@ function obj_mean_continuous(system, prob, K_P, K_I, u_hat, tau, Iteration_obj; 
         x_0 = rand(system.rng, system.Dist_x0, system.n)
         u_s, y_s, z_s = Orbit_continuous_PI(system, K_P, K_I, u_hat, x_0, tau, h=h)
         u_s = nothing
-        GC.gc()
-        mean_obj = mean_obj + obj_trunc_from_traj(system, prob, y_s, z_s, tau)
+        mean_obj = mean_obj + obj_trunc_from_traj(system, prob, y_s, z_s, tau, h)
         y_s = nothing
         z_s = nothing
-        GC.gc()
     end
     return mean_obj / Iteration_obj
 end

@@ -106,8 +106,9 @@ x_0 = rand(system.rng, system.Dist_x0, system.n)
 #Vanila_parameter5_zohでは二回目の初期値の方が対比しやすい
 x_0 = rand(system.rng, system.Dist_x0, system.n)
 z_0 = zeros(system.p)
-T = 0.3
+T = 10
 h = 5e-4
+h = 0.0001
 K_P_Mfree = (list_Kp_seq_ModelFree[trial])[end]
 K_I_Mfree = (list_Ki_seq_ModelFree[trial])[end]
 #K_P_Mfree = I(system.p)
