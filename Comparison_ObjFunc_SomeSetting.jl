@@ -27,11 +27,11 @@ simulation_name = "Vanila_parameter_zoh"
 
 
 println("simulation_name: ", simulation_name)
-@load "System_setting/Noise_dynamics/Settings/Setting$Setting_num/Settings.jld2" Setting
-system = Setting["system"]
 
 dir_comparison = "Comparison_SomeSetting/Noise_dynamics/Setting$Setting_num"
 dir_comparison = dir_comparison * "/" * simulation_name
+
+@load dir_comparison * "/Dict_original_systems.jld2" Dict_original_systems
 
 # パラメータの読み込み（モデルベース側の設定を流用）
 dir_experiment_setting = "System_setting/Noise_dynamics/Settings/Setting$Setting_num/VS_ModelBase"
@@ -70,9 +70,9 @@ tau_eval = 300
 Iteration_obj_eval = 200
 per_system_list_obj_MFree = Vector{Vector{Float64}}(undef, num_of_systems)
 per_system_list_obj_SysId = Vector{Vector{Float64}}(undef, num_of_systems)
-for iter_system in 1:num_of_systems
-    #println("iter_system: ", iter_system)
-
+@threads for iter_system in 1:num_of_systems
+    println("iter_system: ", iter_system)
+    system = Dict_original_systems["system$iter_system"]
     ## 最適化問題のパラメータ
     Q1 = 200.0I(system.p)
     Q2 = 20.0I(system.p)

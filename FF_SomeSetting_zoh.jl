@@ -17,23 +17,21 @@ using Dates
 Setting_num = 10
 simulation_name = "FF_Vanila_parameter_zoh"
 estimated_param = false
-SomeSetting = true
 
-if SomeSetting
-    iter_system = 1
-    simulation_name_param = "Vanila_parameter_zoh"
-    dir_comparison = "Comparison_SomeSetting/Noise_dynamics/Setting$Setting_num"
-    dir_comparison = dir_comparison * "/" * simulation_name_param
-    @load dir_comparison * "/Dict_original_systems.jld2" Dict_original_systems
-    system = Dict_original_systems["system$iter_system"]
-else
-    @load "System_setting/Noise_dynamics/Settings/Setting$Setting_num/Settings.jld2" Setting
-    system = Setting["system"]
-end
 
-n_dim = true # システム同定の際に状態空間の次元を情報として与えるか
+simulation_name_param = "Vanila_parameter_zoh"
+dir_comparison = "Comparison_SomeSetting/Noise_dynamics/Setting$Setting_num"
+dir_comparison = dir_comparison * "/" * simulation_name_param
+@load dir_comparison * "/Dict_original_systems.jld2" Dict_original_systems
+
+dir_experiment_setting = "System_setting/Noise_dynamics/Settings/Setting$Setting_num/VS_ModelBase"
+dir_experiment_setting = dir_experiment_setting * "/" * simulation_name
+params = JSON.parsefile(dir_experiment_setting * "/params.json")
+Ts = params["Ts"]
+
 
 Trials = 10
+num_systems = 10
 
 # FF推定のためのパラメータ
 K_P_uhat = 0.001 * I(system.p)
@@ -59,48 +57,49 @@ Num_TotalSamples = Num_trajectory * Num_Samples_per_traj
 T_Sysid = Ts * Num_Samples_per_traj
 
 ## ディレクトリ作成
-dir = "System_setting/Noise_dynamics/Settings/Setting$Setting_num/VS_ModelBase"
-if SomeSetting
-    dir = dir_comparison
+dir_result = "Comparison_SomeSetting/Noise_dynamics/Setting$Setting_num"
+
+if !isdir(dir_result)
+    mkdir(dir_result)  # フォルダを作成
+end
+dir_result = dir_result * "/" * simulation_name
+if !isdir(dir_result)
+    mkdir(dir_result)  # フォルダを作成
 end
 
-if !isdir(dir)
-    mkdir(dir)  # フォルダを作成
+
+per_system_list_obj_MFree = Vector{Vector{Float64}}(undef, num_of_systems)
+per_system_list_obj_SysId = Vector{Vector{Float64}}(undef, num_of_systems)
+for iter_system in 1:num_of_systems
+    #println("iter_system: ", iter_system)
+
+    ## 最適化問題のパラメータ
+    Q1 = 200.0I(system.p)
+    Q2 = 20.0I(system.p)
+    Q_prime = [system.C'*Q1*system.C zeros(system.n, system.p); zeros(system.p, system.n) Q2]
+    Q_prime = Symmetric((Q_prime + Q_prime') / 2)
+    prob = Problem_param(Q1, Q2, Q_prime, true)
+
+    list_obj_MFree = Vector{Float64}(undef, Trials)
+    list_obj_SysId = Vector{Float64}(undef, Trials)
+    for trial in 1:Trials
+        println("trial: ", trial)
+        Obj_MFree_uhat = obj_mean_continuous_reuse(system, prob,
+            ((Dict_list_Kp_seq_ModelFree["system$iter_system"])[trial])[end],
+            ((Dict_list_Ki_seq_ModelFree["system$iter_system"])[trial])[end],
+            system.u_star, tau_eval, Iteration_obj_eval, h=h_cont)
+        println("model free: ", Obj_MFree_uhat)
+        Obj_SysId = obj_mean_zoh_reuse(system, prob,
+            Dict_list_Kp_Sysid["system$iter_system"][trial],
+            Dict_list_Ki_Sysid["system$iter_system"][trial],
+            system.u_star, Ts, tau_eval, Iteration_obj_eval, h=h_zoh)
+        println("Indirect approach: ", Obj_SysId)
+        list_obj_MFree[trial] = Obj_MFree_uhat
+        list_obj_SysId[trial] = Obj_SysId
+    end
+    per_system_list_obj_MFree[iter_system] = list_obj_MFree
+    per_system_list_obj_SysId[iter_system] = list_obj_SysId
 end
-dir = dir * "/" * simulation_name
-if !isdir(dir)
-    mkdir(dir)  # フォルダを作成
-end
-
-## パラメータの保存
-params = Dict(
-    "Trials" => Trials,
-    "K_P_uhat" => K_P_uhat,
-    "epsilon_u" => epsilon_u,
-    "tau_u" => tau_u,
-    "Ts" => Ts,
-    "Num_trajectory" => Num_trajectory, #サンプル数軌道の数
-    "Num_Samples_per_traj" => Num_Samples_per_traj,
-    "PE_power" => PE_power,
-    "Trials" => Trials,
-    "date" => Dates.now(),
-)
-
-open(dir * "/params.json", "w") do io
-    JSON.print(io, params, 4)  # 可読性も高く整形出力
-end
-
-list_ustar_Sysid = []
-list_uhat = []
-
-list_y_target_error = []
-list_y_target_error_SysId = []
-
-list_Kp_seq_Sysid = []
-list_Ki_seq_Sysid = []
-
-list_Kp_seq_ModelFree = []
-list_Ki_seq_ModelFree = []
 
 for trial in 1:Trials
     println("trial: ", trial)
