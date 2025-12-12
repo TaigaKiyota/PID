@@ -744,10 +744,13 @@ function Orbit_Identification_noise_succinct(system, x_0, T; Ts=10, PE_power=20,
     return u_s, y_s
 end
 
-function Orbit_Identification_noise_Float32(system, x_0, T; Ts=10, PE_power=20, N=0)
+function Orbit_Identification_noise_Float32(system, x_0, T; Ts=10, PE_power=20, N=0, h=0)
     length = Int(round(T / Ts))
+    if h == 0
+        h = system.h
+    end
 
-    N_persample = Int(round(Ts / system.h))
+    N_persample = Int(round(Ts / h))
 
     # --- Float32 に統一 ---
     #x = Float32.(x_0)
@@ -1007,14 +1010,10 @@ function Orbit_continuous_PI_noinplace(system, K_P, K_I, u_hat, x_0, T; h=0)
 end
 
 function Orbit_continuous_PI(system, K_P, K_I, u_hat, x_0, T; h=0)
-
-
     if h == 0
         h = system.h
     end
     N = Int(round(T / h))
-
-
     n, m, p = system.n, system.m, system.p
     A, B, C = system.A, system.B, system.C
     W_half, V_half = system.W_half, system.V_half
@@ -1086,6 +1085,80 @@ function Orbit_continuous_PI(system, K_P, K_I, u_hat, x_0, T; h=0)
 
     return u_s, y_s, z_s
 
+end
+
+
+function Orbit_continuous_P(system, K_P, u_hat, x_0, T; h=0)
+    if h == 0
+        h = system.h
+    end
+    N = Int(round(T / h))
+    n, m, p = system.n, system.m, system.p
+    A, B, C = system.A, system.B, system.C
+    W_half, V_half = system.W_half, system.V_half
+    y_star = system.y_star
+    rng = system.rng
+
+    elty = eltype(x_0)
+
+    # --- 出力配列 ---
+    u_s = zeros(elty, m, N + 1)
+    y_s = zeros(elty, p, N + 1)
+
+    # --- 状態と内部変数 ---
+    x = copy(x_0)                  # x_0 をそのまま共有しないように
+    z = zeros(elty, p)
+
+    y = similar(y_star)
+    mul!(y, C, x)                  # y = C * x
+    @views y_s[:, 1] .= y
+
+    # --- 作業用バッファ ---
+    e = similar(y_star)       # e = y_star - y
+    u_buf = similar(u_hat)        # u_input 用
+    Ax_buf = similar(x_0)          # A*x
+    Bu_buf = similar(x_0)          # B*u
+    w_buf = zeros(elty, n)        # プロセスノイズ
+    Wx_buf = similar(x_0)          # W_half * w
+    v_buf = zeros(elty, p)        # 観測ノイズ
+    Vv_buf = zeros(elty, p)        # V_half * v
+
+    sqrt_h = sqrt(h)
+
+    @inbounds @views for k in 1:N
+        # --- 誤差 e = y_star - y ---
+        @. e = y_star - y
+
+        # --- u = K_P * e + K_I * z + u_hat ---
+        mul!(u_buf, K_P, e)        # u_buf = K_P * e
+
+        @. u_buf = u_buf + u_hat
+
+        # --- x_{k+1} = x_k + h(Ax + Bu) + sqrt(h)W_half * w ---
+        mul!(Ax_buf, A, x)         # Ax_buf = A * x
+        mul!(Bu_buf, B, u_buf)     # Bu_buf = B * u
+
+        randn!(rng, w_buf)         # w_buf ~ N(0, I)
+        mul!(Wx_buf, W_half, w_buf)
+
+        @. x = x + h * (Ax_buf + Bu_buf) + sqrt_h * Wx_buf
+
+        # --- y_{k+1} = Cx + V_half * v ---
+        randn!(rng, v_buf)
+        mul!(Vv_buf, V_half, v_buf)
+
+        mul!(y, C, x)              # y = C * x
+        @. y = y + Vv_buf          # y += ノイズ
+
+        # --- z_{k+1} = z_k + h (y_star - y) ---
+        @. e = y_star - y
+
+        # --- 記録 ---
+        u_s[:, k+1] .= u_buf
+        y_s[:, k+1] .= y
+    end
+
+    return u_s, y_s
 end
 
 function Orbit_Identification_noiseFree(system, x_0, T)

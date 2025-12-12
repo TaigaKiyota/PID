@@ -43,7 +43,11 @@ dir_experiment_setting = "System_setting/Noise_dynamics/Settings/Setting$Setting
 dir_experiment_setting = dir_experiment_setting * "/" * simulation_name
 params = JSON.parsefile(dir_experiment_setting * "/params.json")
 Ts = params["Ts"]
-Num_Samples_per_traj = params["Num_Samples_per_traj"]
+N_inner_obj = params["N_inner_obj"] #変えない
+N_sample = params["N_sample"] #変えない
+tau = params["tau"] #変えない
+N_GD = params["N_GD"] #変えない
+
 #Num_Samples_per_traj = 1000000
 h = 0.005 #時間刻み幅必要に応じて変える
 Steps_per_sample = Ts / h
@@ -51,9 +55,7 @@ Steps_per_sample = round(Steps_per_sample)
 println("Steps_per_sample: ", Steps_per_sample)
 
 accuracy = params["accuracy"]
-T_Sysid = Ts * Num_Samples_per_traj
 Num_trajectory = 1
-Num_TotalSamples = Num_trajectory * Num_Samples_per_traj
 PE_power = params["PE_power"]
 
 Trials = 10
@@ -76,6 +78,17 @@ results_per_system = Vector{Vector{Any}}(undef, num_of_systems)
 for iter_system in 1:num_of_systems
     #システム同定
     original_system = Dict_original_systems["system$iter_system"]
+    K_P_uhat = 0.001 * I(original_system.p)
+    epsilon_u = 1e-3
+    tau_u = Compute_tauu(original_system, K_P_uhat, epsilon_u)
+    println("Estimated tau_u: ", tau_u)
+    Num_Samples_per_traj = (2 * N_inner_obj * N_sample * N_GD * tau + (original_system.m + 1) * tau_u) / Ts
+    Num_Samples_per_traj = Int(trunc(Num_Samples_per_traj))
+    println("Num_Samples_per_traj: ", Num_Samples_per_traj)
+    noise_free = false
+    Num_TotalSamples = Num_trajectory * Num_Samples_per_traj
+    T_Sysid = Ts * Num_Samples_per_traj
+    println("Identification horizon: ", T_Sysid)
     local_list = Vector{Any}(undef, Trials)
     for trial in 1:Trials
         #@info "thread $(threadid()) trial = $trial"
@@ -87,7 +100,8 @@ for iter_system in 1:num_of_systems
             T_Sysid,
             PE_power,
             accuracy=accuracy,
-            true_dimension=true)
+            true_dimension=true,
+            h=h)
         println("iter_system $iter_system trial$trial has done ")
     end
     #Dict_list_est_system["system$iter_system"] = list_est_system

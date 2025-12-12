@@ -13,6 +13,8 @@ include("function_SomeSetting.jl")
 using JLD2
 using JSON
 using Dates
+## 相対誤差を計算するもの　
+ErrorNorm(A, Aans, A0) = sqrt(sum((A - Aans) .^ 2) / sum((Aans - A0) .^ 2))
 
 Setting_num = 10
 simulation_name = "FF_Vanila_parameter_zoh"
@@ -31,30 +33,9 @@ Ts = params["Ts"]
 
 
 Trials = 10
-num_systems = 10
+num_of_systems = 10
 
-# FF推定のためのパラメータ
-K_P_uhat = 0.001 * I(system.p)
-A_K_uhat = system.A - system.B * K_P_uhat * system.C
-println(eigvals(A_K_uhat))
-# tau_uのサイズの決定
-epsilon_u = 1e-3
-tau_u = Compute_tauu(system, K_P_uhat, epsilon_u)
-println("Estimated tau_u: ", tau_u)
-## システム同定パラメータ
-Ts = 0.01 #サンプル間隔
-Num_trajectory = 1 #サンプル数軌道の数
-PE_power = 20 #Setting1~4までは20でやっていた．5は1
-Num_Samples_per_traj = (system.m + 1) * tau_u / Ts
-Num_Samples_per_traj = Int(trunc(Num_Samples_per_traj))
-println("Num_Samples_per_traj: ", Num_Samples_per_traj)
-noise_free = false
 
-Steps_per_sample = Ts / system.h
-Steps_per_sample = round(Steps_per_sample)
-println("Steps_per_sample: ", Steps_per_sample)
-Num_TotalSamples = Num_trajectory * Num_Samples_per_traj
-T_Sysid = Ts * Num_Samples_per_traj
 
 ## ディレクトリ作成
 dir_result = "Comparison_SomeSetting/Noise_dynamics/Setting$Setting_num"
@@ -68,119 +49,107 @@ if !isdir(dir_result)
 end
 
 
-per_system_list_obj_MFree = Vector{Vector{Float64}}(undef, num_of_systems)
-per_system_list_obj_SysId = Vector{Vector{Float64}}(undef, num_of_systems)
+per_system_estimated_tauu = Vector{Float64}(undef, num_of_systems)
+per_system_list_uhat = Vector{Vector{Vector{Float64}}}(undef, num_of_systems)
+per_system_list_ustar_Sysid = Vector{Vector{Vector{Float64}}}(undef, num_of_systems)
 for iter_system in 1:num_of_systems
-    #println("iter_system: ", iter_system)
+    println("iter_system: ", iter_system)
+    system = Dict_original_systems["system$iter_system"]
+    K_P_uhat = 0.001 * I(system.p)
+    A_K_uhat = system.A - system.B * K_P_uhat * system.C
+    # tau_uのサイズの決定
+    epsilon_u = 1e-3
+    tau_u = Compute_tauu(system, K_P_uhat, epsilon_u)
+    println("Estimated tau_u: ", tau_u)
+    ## システム同定パラメータ
 
-    ## 最適化問題のパラメータ
-    Q1 = 200.0I(system.p)
-    Q2 = 20.0I(system.p)
-    Q_prime = [system.C'*Q1*system.C zeros(system.n, system.p); zeros(system.p, system.n) Q2]
-    Q_prime = Symmetric((Q_prime + Q_prime') / 2)
-    prob = Problem_param(Q1, Q2, Q_prime, true)
+    Num_trajectory = 1 #サンプル数軌道の数
+    PE_power = 20 #Setting1~4までは20でやっていた．5は1
+    Num_Samples_per_traj = (system.m + 1) * tau_u / Ts
+    Num_Samples_per_traj = Int(trunc(Num_Samples_per_traj))
+    println("Num_Samples_per_traj: ", Num_Samples_per_traj)
+    noise_free = false
 
-    list_obj_MFree = Vector{Float64}(undef, Trials)
-    list_obj_SysId = Vector{Float64}(undef, Trials)
+    Steps_per_sample = Ts / system.h
+    Steps_per_sample = round(Steps_per_sample)
+    println("Steps_per_sample: ", Steps_per_sample)
+    Num_TotalSamples = Num_trajectory * Num_Samples_per_traj
+    T_Sysid = Ts * Num_Samples_per_traj
+
+    per_system_estimated_tauu[iter_system] = tau_u
+
+    list_uhat = Vector{Vector{Float64}}(undef, Trials)
+    list_ustar_Sysid = Vector{Vector{Float64}}(undef, Trials)
     for trial in 1:Trials
         println("trial: ", trial)
-        Obj_MFree_uhat = obj_mean_continuous_reuse(system, prob,
-            ((Dict_list_Kp_seq_ModelFree["system$iter_system"])[trial])[end],
-            ((Dict_list_Ki_seq_ModelFree["system$iter_system"])[trial])[end],
-            system.u_star, tau_eval, Iteration_obj_eval, h=h_cont)
-        println("model free: ", Obj_MFree_uhat)
-        Obj_SysId = obj_mean_zoh_reuse(system, prob,
-            Dict_list_Kp_Sysid["system$iter_system"][trial],
-            Dict_list_Ki_Sysid["system$iter_system"][trial],
-            system.u_star, Ts, tau_eval, Iteration_obj_eval, h=h_zoh)
-        println("Indirect approach: ", Obj_SysId)
-        list_obj_MFree[trial] = Obj_MFree_uhat
-        list_obj_SysId[trial] = Obj_SysId
-    end
-    per_system_list_obj_MFree[iter_system] = list_obj_MFree
-    per_system_list_obj_SysId[iter_system] = list_obj_SysId
-end
+        ## システム同定
+        est_system = Est_discrete_system(system, Num_TotalSamples, Num_trajectory, Steps_per_sample, Ts, T_Sysid, PE_power)
+        y_inf_sysid = -system.C * (system.A \ (system.B * est_system.u_star))
+        list_ustar_Sysid[trial] = est_system.u_star
 
-for trial in 1:Trials
-    println("trial: ", trial)
-    ## システム同定
-    est_system = Est_discrete_system(system, Num_TotalSamples, Num_trajectory, Steps_per_sample, Ts, T_Sysid, PE_power)
-    y_inf_sysid = -system.C * (system.A \ (system.B * est_system.u_star))
-    println("yの誤差 モデルベース", system.y_star - y_inf_sysid)
-    push!(list_ustar_Sysid, est_system.u_star)
-
-    ## FF 推定
-    #ベースとなる誤差の収集
-    x_0 = rand(system.rng, system.Dist_x0, system.n)
-    reset = zeros(system.m)
-    y = Error_t_P_noise(system, K_P_uhat, tau_u, reset)
-    error_zero = Error_t_P_noise(system, K_P_uhat, tau_u, reset)
-
-    Ematrix = zeros(system.p, system.m)
-    Umatrix = Matrix(I, system.m, system.m)
-    #データの収集
-    for i in 1:system.m
-        #global Umatrix
-        #global Ematrix
-        reset = Umatrix[:, i]
-        Umatrix[:, i] = reset
+        ## FF 推定
+        #ベースとなる誤差の収集
         x_0 = rand(system.rng, system.Dist_x0, system.n)
-        #_, y_s, Timeline, _ = Orbit_P_noise(system, K_P, x_0, tau_u, reset)
-        error_i = Error_t_P_noise(system, K_P_uhat, tau_u, reset)
+        reset = zeros(system.m)
+        y = Error_t_P_noise(system, K_P_uhat, tau_u, reset)
+        error_zero = Error_t_P_noise(system, K_P_uhat, tau_u, reset)
 
-        Ematrix[:, i] = error_i - error_zero
+        Ematrix = zeros(system.p, system.m)
+        Umatrix = Matrix(I, system.m, system.m)
+        #データの収集
+        for i in 1:system.m
+            #global Umatrix
+            #global Ematrix
+            reset = Umatrix[:, i]
+            Umatrix[:, i] = reset
+            x_0 = rand(system.rng, system.Dist_x0, system.n)
+            #_, y_s, Timeline, _ = Orbit_P_noise(system, K_P, x_0, tau_u, reset)
+            error_i = Error_t_P_noise(system, K_P_uhat, tau_u, reset)
+
+            Ematrix[:, i] = error_i - error_zero
+        end
+        u_hat = -Ematrix' * ((Ematrix * Ematrix') \ error_zero)
+        list_uhat[trial] = u_hat
     end
-    u_hat = -Ematrix' * ((Ematrix * Ematrix') \ error_zero)
-
-    println("推定したフィードフォワード: ", u_hat)
-    println("uの平衡点, 正解のフィードフォワード: ", system.u_star)
-    println("Difference: ", u_hat - system.u_star)
-    println("error: ", sqrt(sum((u_hat - system.u_star) .^ 2)))
-    push!(list_uhat, u_hat)
+    per_system_list_uhat[iter_system] = list_uhat
+    per_system_list_ustar_Sysid[iter_system] = list_ustar_Sysid
 end
+
 ## 結果の保存
-@save dir * "/list_ustar_Sysid.jld2" list_ustar_Sysid
-@save dir * "/list_uhat.jld2" list_uhat
-## 相対誤差を計算するもの　
-ErrorNorm(A, Aans, A0) = sqrt(sum((A - Aans) .^ 2) / sum((Aans - A0) .^ 2))
+@save dir_result * "/per_system_list_uhat.jld2" per_system_list_uhat
+@save dir_result * "/per_system_list_ustar_Sysid.jld2" per_system_list_ustar_Sysid
+@save dir_result * "/per_system_estimated_tauu.jld2" per_system_estimated_tauu
 
-## FF推定の結果表示
-list_error_u_Sysid = []
-list_error_u_MFree = []
-for trial in 1:Trials
-    push!(list_error_u_Sysid, ErrorNorm(list_ustar_Sysid[trial], system.u_star, zeros(system.m)))
-    push!(list_error_u_MFree, ErrorNorm(list_uhat[trial], system.u_star, zeros(system.m)))
+
+for iter_system in 1:num_of_systems
+    system = Dict_original_systems["system$iter_system"]
+    list_uhat = per_system_list_uhat[iter_system]
+    list_ustar_Sysid = per_system_list_ustar_Sysid[iter_system]
+
+    K_P = zeros(system.p, system.p)
+
+    list_error_ystar_Sysid = Vector{Float64}(undef, Trials)
+    list_error_ystar_MFree = Vector{Float64}(undef, Trials)
+    for trial in 1:Trials
+        ustar_sysid = list_ustar_Sysid[trial]
+        y_inf_sysid = -system.C * (system.A \ (system.B * ustar_sysid))
+        list_error_ystar_Sysid[trial] = ErrorNorm(y_inf_sysid, system.y_star, zeros(system.m))
+
+        uhat = list_uhat[trial]
+        y_inf_uhat = -system.C * (system.A \ (system.B * uhat))
+        list_error_ystar_MFree[trial] = ErrorNorm(y_inf_uhat, system.y_star, zeros(system.m))
+    end
+    if !isdir(dir_result * "/system$iter_system")
+        mkdir(dir_result * "/system$iter_system")  # フォルダを作成
+    end
+    boxplot(list_error_ystar_MFree,
+        tickfontsize=15, yguidefont=font(15), legend=false, fillalpha=0.0, outliercolor=:white, markercolor=:white)
+    boxplot!(list_error_ystar_Sysid, fillalpha=0.0, outliercolor=:white, markercolor=:white)
+    xticks!((1:2, ["Proposed method", "Indirect approach"]))
+    ylims!(0, 0.35)
+    savefig(dir_result * "/system$iter_system/FF_y_error_boxplot.png")
+
+    _, ys_MFree = Orbit_continuous_P(system, K_P, u_hat, x_0, T)
 end
 
-list_error_ystar_Sysid = []
-list_error_ystar_MFree = []
-for trial in 1:Trials
-    ustar_sysid = list_ustar_Sysid[trial]
-    y_inf_sysid = -system.C * (system.A \ (system.B * ustar_sysid))
-    push!(list_error_ystar_Sysid, ErrorNorm(y_inf_sysid, system.y_star, zeros(system.m)))
-
-    uhat = list_uhat[trial]
-    y_inf_uhat = -system.C * (system.A \ (system.B * uhat))
-    push!(list_error_ystar_MFree, ErrorNorm(y_inf_uhat, system.y_star, zeros(system.m)))
-end
-
-println(list_error_u_Sysid)
-println(list_error_u_MFree)
-
-println("yの相対誤差 提案手法", list_error_ystar_MFree)
-println("yの相対誤差 モデルベース", list_error_ystar_Sysid)
-
-boxplot(list_error_u_MFree,
-    tickfontsize=15, yguidefont=font(16), fillcolor=:red, legend=false, fillalpha=0.7, outliercolor=:red, markercolor=:red)
-boxplot!(list_error_u_Sysid, fillcolor=:blue, outliercolor=:blue, markercolor=:blue)
-xticks!((1:2, ["Proposed method", "Indirect approach"]))
-ylims!(1e-2, 20)
-savefig(dir * "/FF_ustar_error_boxplot.png")
-
-boxplot(list_error_ystar_MFree,
-    tickfontsize=15, yguidefont=font(15), legend=false, fillalpha=0.0, outliercolor=:white, markercolor=:white)
-boxplot!(list_error_ystar_Sysid, fillalpha=0.0, outliercolor=:white, markercolor=:white)
-xticks!((1:2, ["Proposed method", "Indirect approach"]))
-ylims!(0, 0.35)
-savefig(dir * "/FF_y_error_boxplot.png")
 

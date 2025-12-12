@@ -49,7 +49,7 @@ params = JSON.parsefile(dir_experiment_setting * "/params.json")
 eta_discrete = params["eta_discrete"]
 eta_discrete = 0.0001
 epsilon_GD_discrete = params["epsilon_GD_discrete"]
-N_GD_discrete = 500000 #500000
+N_GD_discrete = 100000 #500000
 projection = params["projection"]
 println("eta_discrete: ", eta_discrete)
 
@@ -59,8 +59,8 @@ K_I_disc = 0.01 * I(system.p) #zeros((system.m, system.p))
 Q1 = 0.1 * I(system.p)
 Q2 = 0.01 * I(system.p)
 
-eps_interval = NaN
-M_interval = NaN
+eps_interval = 0
+M_interval = 5
 N_sample = NaN
 N_inner_obj = NaN
 tau = NaN

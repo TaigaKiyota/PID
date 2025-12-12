@@ -234,7 +234,8 @@ function Est_discrete_system(system,
     T_Sysid,
     PE_power;
     accuracy="Float64",
-    true_dimension=false)
+    true_dimension=false,
+    h=0)
     # System identification for discrete system
     x_0 = rand(system.rng, system.Dist_x0, system.n)
     if accuracy == "Float64"
@@ -248,16 +249,16 @@ function Est_discrete_system(system,
             x_0,
             T_Sysid,
             Ts=Ts,
-            PE_power=PE_power)
+            PE_power=PE_power, h=h)
     end
 
     #println("Data has collected.")
     #println(Ys[1, 1:10])
-    #println(Us[1, 1:10])
+    #println(Ys[:, end-10:end])
     Data = iddata(Ys, Us, Ts)
     Ys = nothing
     Us = nothing
-    GC.gc()
+    #GC.gc()
     # N4sidによるシステム同定
     sys_disc = n4sid(Data, verbose=false, zeroD=true)
     #sys_disc = subspaceid(Data, system.n, verbose=false, zeroD=true)
