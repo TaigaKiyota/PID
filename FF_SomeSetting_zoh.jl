@@ -29,8 +29,8 @@ dir_comparison = dir_comparison * "/" * simulation_name_param
 dir_experiment_setting = "System_setting/Noise_dynamics/Settings/Setting$Setting_num/VS_ModelBase"
 dir_experiment_setting = dir_experiment_setting * "/" * simulation_name
 params = JSON.parsefile(dir_experiment_setting * "/params.json")
-Ts = params["Ts"]
-
+Ts = params["Ts"] #変えてもいいPIゲインと合わせる
+Ts = 0.01
 
 Trials = 10
 num_of_systems = 10

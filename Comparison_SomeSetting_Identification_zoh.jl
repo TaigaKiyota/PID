@@ -42,14 +42,15 @@ end
 dir_experiment_setting = "System_setting/Noise_dynamics/Settings/Setting$Setting_num/VS_ModelBase"
 dir_experiment_setting = dir_experiment_setting * "/" * simulation_name
 params = JSON.parsefile(dir_experiment_setting * "/params.json")
-Ts = params["Ts"]
+Ts = params["Ts"] #変えてもいい．FFと合わせる
+Ts = 0.01
 N_inner_obj = params["N_inner_obj"] #変えない
 N_sample = params["N_sample"] #変えない
 tau = params["tau"] #変えない
 N_GD = params["N_GD"] #変えない
 
 #Num_Samples_per_traj = 1000000
-h = 0.005 #時間刻み幅必要に応じて変える
+h = 0.01 #時間刻み幅必要に応じて変える
 Steps_per_sample = Ts / h
 Steps_per_sample = round(Steps_per_sample)
 println("Steps_per_sample: ", Steps_per_sample)
