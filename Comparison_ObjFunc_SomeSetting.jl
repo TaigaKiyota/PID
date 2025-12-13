@@ -39,6 +39,8 @@ dir_experiment_setting = dir_experiment_setting * "/" * simulation_name
 params = JSON.parsefile(dir_experiment_setting * "/params.json")
 
 Ts = params["Ts"]
+Ts = 0.01
+println("Ts: ", Ts)
 
 Trials = 10
 num_of_systems = 10

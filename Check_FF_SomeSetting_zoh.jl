@@ -30,7 +30,8 @@ dir_experiment_setting = "System_setting/Noise_dynamics/Settings/Setting$Setting
 dir_experiment_setting = dir_experiment_setting * "/" * simulation_name
 params = JSON.parsefile(dir_experiment_setting * "/params.json")
 Ts = params["Ts"]
-
+Ts = 0.01
+println(Ts)
 
 Trials = 10
 num_of_systems = 10
@@ -109,7 +110,7 @@ boxplot(list_error_ystar_MFree,
 boxplot!(list_error_ystar_Sysid, fillalpha=0.0, outliercolor=:white, markercolor=:white)
 xticks!((1:2, ["Proposed method", "Model-based Method"]))
 ylabel!("Steady-state output relative error", yguidefont=font(14))
-ylims!(0, 0.45)
+ylims!(0, 0.35)
 savefig(dir_result * "/system$iter_system/FF_y_error_boxplot.png")
 
 #プロットをする

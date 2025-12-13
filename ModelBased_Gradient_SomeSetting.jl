@@ -15,6 +15,9 @@ using JSON
 using Dates
 using Profile
 
+using Base.Threads
+Threads.nthreads()
+
 """
 事前に同定済みの複数システムに対して、モデルベースの離散時間勾配法
 （`ProjGrad_Discrete_Conststep_ModelBased_Noise`）をまとめて実行するスクリプト。
@@ -47,9 +50,11 @@ dir_experiment_setting = dir_experiment_setting * "/" * simulation_name
 params = JSON.parsefile(dir_experiment_setting * "/params.json")
 
 eta_discrete = params["eta_discrete"]
-eta_discrete = 0.0001
+#eta_discrete = 0.0001
+eta_discrete = 0.00005
 epsilon_GD_discrete = params["epsilon_GD_discrete"]
 N_GD_discrete = 100000 #500000
+
 projection = params["projection"]
 println("eta_discrete: ", eta_discrete)
 
@@ -99,7 +104,7 @@ Dict_list_Ki_Sysid = Dict{Any,Any}()
 
 num_of_systems = length(Dict_list_est_system)
 
-for iter_system in 1:num_of_systems
+@threads for iter_system in 1:num_of_systems
   println("iter_system: ", iter_system)
   list_est = Dict_list_est_system["system$iter_system"]
   num_trials = length(list_est)
