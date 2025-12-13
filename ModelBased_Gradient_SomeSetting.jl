@@ -54,12 +54,11 @@ eta_discrete = params["eta_discrete"]
 eta_discrete = 0.00005
 epsilon_GD_discrete = params["epsilon_GD_discrete"]
 N_GD_discrete = 100000 #500000
-
 projection = params["projection"]
 println("eta_discrete: ", eta_discrete)
 
-K_P_disc = 0.01 * I(system.p) #zeros((system.m, system.p))
-K_I_disc = 0.01 * I(system.p) #zeros((system.m, system.p))
+K_P_disc = Matrix(0.01 * I(system.p)) #zeros((system.m, system.p))
+K_I_disc = Matrix(0.01 * I(system.p))#zeros((system.m, system.p))
 
 Q1 = 0.1 * I(system.p)
 Q2 = 0.01 * I(system.p)
@@ -104,7 +103,7 @@ Dict_list_Ki_Sysid = Dict{Any,Any}()
 
 num_of_systems = length(Dict_list_est_system)
 
-@threads for iter_system in 1:num_of_systems
+for iter_system in 1:num_of_systems
   println("iter_system: ", iter_system)
   list_est = Dict_list_est_system["system$iter_system"]
   num_trials = length(list_est)
@@ -125,6 +124,7 @@ num_of_systems = length(Dict_list_est_system)
       prob_sysid,
       Opt_discrete,
     )
+    println()
     local_Kp[trial] = Kp_seq_SysId[end]
     local_Ki[trial] = Ki_seq_SysId[end]
     println("iter_system $iter_system trial $trial has done")

@@ -714,22 +714,25 @@ end
 
 function ProjGrad_Discrete_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Opt)
     # 離散時間モデルベース勾配降下法
-    f_list = []
-    Kp_list = []
-    Ki_list = []
+    ws = GradObj_buffer(system)
+    Kp_list = Vector{typeof(K_P)}(undef, Opt.N_GD + 1)
+    Ki_list = Vector{typeof(K_I)}(undef, Opt.N_GD + 1)
+    f_list = Vector{Float64}(undef, Opt.N_GD + 1)
 
-    push!(Kp_list, K_P)
-    push!(Ki_list, K_I)
+    # 最初の値と勾配を1回の lyapd で取得
+    grad_P, grad_I, val = grad_obj_discrete_noise!(ws, system, prob, K_P, K_I)
+    Kp_list[1] = K_P
+    Ki_list[1] = K_I
+    f_list[1] = val
+    println("val: ", val)
 
-    cnt = 0
+    diagP = zeros(eltype(K_P), size(K_P))          # diag 用バッファ
+    diagI = zeros(eltype(K_I), size(K_I))
+
+    cnt = 1
     # 初期点での目的関数値
 
-    val = ObjectiveFunction_discrete_noise(system, prob, K_P, K_I)
-    println("目的関数: ", val)
-    push!(f_list, val)
-    ws = GradObj_buffer(system)
-
-    while cnt < Opt.N_GD
+    while cnt <= Opt.N_GD
         #grad_P, grad_I = grad_obj_discrete_noise(system, prob, K_P, K_I)
         grad_P, grad_I = grad_obj_discrete_noise!(ws, system, prob, K_P, K_I)
         if Opt.projection == "diag"
@@ -745,25 +748,27 @@ function ProjGrad_Discrete_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Op
             K_P_next = Projection_eigenvalues_interval(K_P_next, Opt)
             K_I_next = Projection_eigenvalues_interval(K_I_next, Opt)
         elseif Opt.projection == "Frobenius"
-
-            K_P_next = K_P - Opt.eta * grad_P
-            K_I_next = K_I - Opt.eta * grad_I
-            K_P_next = clip_frobenius(K_P_next, Opt)
-            K_I_next = clip_frobenius(K_I_next, Opt)
+            K_P_next = clip_frobenius(K_P .- Opt.eta .* grad_P, Opt)
+            K_I_next = clip_frobenius(K_I .- Opt.eta .* grad_I, Opt)
         end
 
-        val = ObjectiveFunction_discrete_noise(system, prob, K_P_next, K_I_next)
+        step_norm = hypot(norm(K_P_next - K_P), norm(K_I_next - K_I))
+        K_P, K_I = K_P_next, K_I_next
+
+        # 次のループ用の勾配＋目的値を1回の計算で
+        grad_P, grad_I, val = grad_obj_discrete_noise!(ws, system, prob, K_P, K_I)
+        cnt += 1
+        Kp_list[cnt] = K_P
+        Ki_list[cnt] = K_I
+        f_list[cnt] = val
         #射影する
         #println(f_val)
-        if (sqrt(sum((K_P_next - K_P) .^ 2) + sum((K_I_next - K_I) .^ 2)) < Opt.epsilon_GD * Opt.eta)
+        if (step_norm < Opt.epsilon_GD * Opt.eta)
             println(cnt)
             println(val)
-            push!(Kp_list, K_P)
-            push!(Ki_list, K_I)
-            push!(f_list, val)
             return Kp_list, Ki_list, f_list
         end
-        if (cnt % 50000 == 0)
+        if (cnt % 50000 == 2)
             println(cnt)
             println(val)
             println("closed loop 固有値絶対値最大値",
@@ -772,14 +777,6 @@ function ProjGrad_Discrete_Conststep_ModelBased_Noise(K_P, K_I, system, prob, Op
             #println("勾配の推定", est_grad)
             #println("勾配", 2 * ((C * inv(A_K) * B * K_M)' * (C * inv(A_K) * B * K_M)) * (reset - u_equib))
         end
-        cnt += 1
-        K_P = K_P_next
-        K_I = K_I_next
-
-        push!(Kp_list, K_P)
-        push!(Ki_list, K_I)
-        push!(f_list, val)
-
     end
     return Kp_list, Ki_list, f_list
 end
